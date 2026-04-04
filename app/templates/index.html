@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WKFL AI Briefing</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+  header { border-bottom: 1px solid #2a2a2a; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 20px; font-weight: 700; letter-spacing: 0.05em; color: #fff; }
+  header span { font-size: 13px; color: #666; }
+  main { max-width: 720px; margin: 40px auto; padding: 0 24px; }
+  .generate-section { margin-bottom: 40px; }
+  .generate-section h2 { font-size: 14px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
+  #generateBtn {
+    background: #fff; color: #0f0f0f; border: none; padding: 12px 28px;
+    font-size: 15px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: opacity 0.15s;
+  }
+  #generateBtn:hover { opacity: 0.85; }
+  #generateBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #statusMsg { margin-top: 14px; font-size: 14px; color: #888; }
+  #statusMsg.success { color: #4ade80; }
+  #statusMsg.error { color: #f87171; }
+  #logBox { margin-top: 12px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px; padding: 14px; font-family: "SF Mono", "Menlo", monospace; font-size: 12px; color: #aaa; white-space: pre-wrap; display: none; max-height: 200px; overflow-y: auto; }
+  .articles-section h2 { font-size: 14px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
+  .article-list { list-style: none; }
+  .article-list li { border-bottom: 1px solid #1e1e1e; }
+  .article-list li a {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 4px; text-decoration: none; color: #e0e0e0; transition: color 0.15s;
+  }
+  .article-list li a:hover { color: #fff; }
+  .article-list li a .date { font-size: 15px; font-weight: 500; }
+  .article-list li a .arrow { font-size: 18px; color: #444; }
+  .empty { color: #555; font-size: 14px; padding: 16px 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>WKFL</h1>
+  <span>AI Briefing</span>
+</header>
+<main>
+  <div class="generate-section">
+    <h2>Generate</h2>
+    <button id="generateBtn" onclick="startGenerate()">今日の記事を生成</button>
+    <div id="statusMsg"></div>
+    <pre id="logBox"></pre>
+  </div>
+
+  <div class="articles-section">
+    <h2>Archive</h2>
+    {% if articles %}
+    <ul class="article-list">
+      {% for a in articles %}
+      <li>
+        <a href="/articles/{{ a.date }}">
+          <span class="date">📄 AI Briefing {{ a.date }}</span>
+          <span class="arrow">›</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">記事がまだありません。上のボタンで生成してください。</p>
+    {% endif %}
+  </div>
+</main>
+
+<script>
+let polling = null;
+
+function startGenerate() {
+  const btn = document.getElementById('generateBtn');
+  const msg = document.getElementById('statusMsg');
+  const log = document.getElementById('logBox');
+
+  btn.disabled = true;
+  msg.className = '';
+  msg.textContent = '生成中...（1〜2分かかります）';
+  log.style.display = 'none';
+  log.textContent = '';
+
+  fetch('/api/generate', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'already_running') {
+        msg.textContent = '既に生成中です...';
+      }
+      polling = setInterval(pollStatus, 3000);
+    });
+}
+
+function pollStatus() {
+  fetch('/api/status')
+    .then(r => r.json())
+    .then(data => {
+      const msg = document.getElementById('statusMsg');
+      const log = document.getElementById('logBox');
+      const btn = document.getElementById('generateBtn');
+
+      if (!data.running && data.last) {
+        clearInterval(polling);
+        btn.disabled = false;
+        if (data.last.success) {
+          msg.className = 'success';
+          msg.textContent = '✅ 生成完了！ページを更新すると記事が表示されます。';
+        } else {
+          msg.className = 'error';
+          msg.textContent = '❌ エラーが発生しました。';
+        }
+        log.textContent = data.last.output;
+        log.style.display = 'block';
+      }
+    });
+}
+
+// Resume polling if job was running when page loaded
+{% if job.running %}
+document.getElementById('generateBtn').disabled = true;
+document.getElementById('statusMsg').textContent = '生成中...（1〜2分かかります）';
+polling = setInterval(pollStatus, 3000);
+{% endif %}
+</script>
+</body>
+</html>

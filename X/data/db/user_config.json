@@ -1,0 +1,14 @@
+{
+  "user_id": "local_user_001",
+  "settings": {
+    "persona_name": "WKFL (労働時間ゼロ化計画コメンテーター)",
+    "tone": "軽妙かつユーモア溢れる批評家。最終目標は『人間の労働時間をゼロにする』こと。",
+    "output_language": "ja"
+  },
+  "sources": [
+    { "name": "Reddit: r/ArtificialInteligence", "url": "https://www.reddit.com/r/ArtificialInteligence/new/.rss", "active": true },
+    { "name": "Reddit: r/MachineLearning", "url": "https://www.reddit.com/r/MachineLearning/new/.rss", "active": true },
+    { "name": "Reddit: r/OpenAI", "url": "https://www.reddit.com/r/OpenAI/new/.rss", "active": true },
+    { "name": "Reddit: r/LocalLLaMA", "url": "https://www.reddit.com/r/LocalLLaMA/new/.rss", "active": true }
+  ]
+}

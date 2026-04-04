@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Briefing {{ date }} | WKFL</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+  header { border-bottom: 1px solid #2a2a2a; padding: 20px 32px; display: flex; align-items: center; gap: 16px; }
+  header a.back { font-size: 14px; color: #666; text-decoration: none; }
+  header a.back:hover { color: #aaa; }
+  header h1 { font-size: 18px; font-weight: 600; color: #fff; }
+  #copyBtn {
+    background: #1e1e1e; color: #ccc; border: 1px solid #333;
+    padding: 8px 16px; font-size: 13px; border-radius: 6px; cursor: pointer;
+    transition: background 0.15s, color 0.15s; white-space: nowrap;
+  }
+  #copyBtn:hover { background: #2a2a2a; color: #fff; }
+  #copyBtn.copied { background: #14532d; color: #4ade80; border-color: #166534; }
+  main { max-width: 720px; margin: 40px auto; padding: 0 24px 80px; }
+
+  /* Markdown styles */
+  .article h1 { font-size: 24px; font-weight: 700; margin-bottom: 24px; color: #fff; line-height: 1.3; }
+  .article h2 { font-size: 18px; font-weight: 700; margin: 36px 0 14px; padding-bottom: 8px; border-bottom: 1px solid #2a2a2a; color: #fff; }
+  .article h3 { font-size: 16px; font-weight: 600; margin: 24px 0 10px; color: #e0e0e0; }
+  .article p { line-height: 1.75; margin-bottom: 14px; font-size: 15px; color: #ccc; }
+  .article hr { border: none; border-top: 1px solid #2a2a2a; margin: 28px 0; }
+  .article strong { color: #fff; }
+  .article a { color: #60a5fa; text-decoration: none; }
+  .article a:hover { text-decoration: underline; }
+  .article blockquote { border-left: 3px solid #444; padding: 4px 16px; margin: 16px 0; color: #999; font-style: italic; }
+  .article ul, .article ol { margin: 12px 0 12px 24px; }
+  .article li { margin-bottom: 6px; line-height: 1.7; font-size: 15px; color: #ccc; }
+  .article code { background: #1e1e1e; padding: 2px 6px; border-radius: 4px; font-family: "SF Mono", "Menlo", monospace; font-size: 13px; color: #e2b96f; }
+  .article pre { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 16px; overflow-x: auto; margin: 16px 0; }
+  .article pre code { background: none; padding: 0; color: #aaa; font-size: 13px; }
+  .article table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  .article th { background: #1a1a1a; padding: 10px 14px; text-align: left; color: #fff; border: 1px solid #2a2a2a; }
+  .article td { padding: 10px 14px; border: 1px solid #1e1e1e; color: #ccc; }
+  .article tr:nth-child(even) td { background: #141414; }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/">← 一覧に戻る</a>
+  <h1>AI Briefing {{ date }}</h1>
+  <button id="copyBtn" onclick="copyMarkdown()">Markdownをコピー</button>
+</header>
+<textarea id="rawMd" style="display:none">{{ raw }}</textarea>
+<main>
+  <div class="article">
+    {{ content | safe }}
+  </div>
+</main>
+<script>
+function copyMarkdown() {
+  const text = document.getElementById('rawMd').value;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'コピーしました！';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Markdownをコピー';
+      btn.classList.remove('copied');
+    }, 2000);
+  });
+}
+</script>
+</body>
+</html>
