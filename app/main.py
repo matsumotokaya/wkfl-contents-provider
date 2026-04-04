@@ -42,14 +42,11 @@ def _get_articles() -> list[dict]:
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def index(request: Request):
-    try:
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "articles": _get_articles(),
-            "job": _job,
-        })
-    except Exception as e:
-        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"articles": _get_articles(), "job": _job},
+    )
 
 
 @app.get("/articles/{date}", response_class=HTMLResponse)
@@ -62,12 +59,11 @@ async def article_detail(request: Request, date: str):
     with open(filepath, encoding="utf-8") as f:
         raw = f.read()
     content_html = md.markdown(raw, extensions=["tables", "fenced_code"])
-    return templates.TemplateResponse("article.html", {
-        "request": request,
-        "date": date,
-        "content": content_html,
-        "raw": raw,
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="article.html",
+        context={"date": date, "content": content_html, "raw": raw},
+    )
 
 
 @app.post("/api/generate")
