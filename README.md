@@ -4,6 +4,40 @@
 
 ---
 
+## 記事生成の2つのルート
+
+### ルートA: チャット上でLLMに直接依頼する（最もシンプル）
+
+アプリもターミナルも不要。以下の手順で記事を生成できる。
+
+1. `X/data/raw_feeds/YYYY-MM-DD_raw.json` の中身をコピー
+2. Claude（claude.ai）またはChatGPTのチャット画面に貼り付け
+3. 以下のプロンプトを添える：
+
+```
+あなたはWKFLというAIポッドキャストパーソナリティです。
+添付のReddit RAW DATAから3コーナー形式の日本語記事を生成してください。
+フォーマットはREADMEのAIペルソナ・番組構成セクションに従ってください。
+```
+
+**メリット**: 環境構築不要、APIキー不要、コスト0  
+**デメリット**: 毎回手動でJSONを貼り付ける必要がある
+
+### ルートB: ターミナルから実行する
+
+```bash
+cd /Users/kaya.matsumoto/projects/WKFL
+python3 X/scripts/run_all.py
+```
+
+Anthropic APIキーとクレジット残高が必要。生成記事は `note/AI_Briefing_YYYY-MM-DD.md` に保存される。
+
+### ルートC: WebアプリのUIから実行する（現在デプロイ中・問題あり）
+
+`https://wkfl-contents-provider.onrender.com` にアクセスして「今日の記事を生成」ボタンを押す。**現在APIエラーで動作不可（下記参照）。**
+
+---
+
 ## 🚨 未解決の問題（引き継ぎ事項）
 
 ### Render上でAnthropicAPIが `credit balance too low` エラーになる
