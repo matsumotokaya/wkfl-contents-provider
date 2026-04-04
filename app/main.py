@@ -21,6 +21,10 @@ TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 app = FastAPI()
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+# Ensure required directories exist (not in git)
+os.makedirs(NOTE_DIR, exist_ok=True)
+os.makedirs(os.path.join(PROJECT_ROOT, "X", "data", "raw_feeds"), exist_ok=True)
+
 # In-memory generation job state
 _job: dict = {"running": False, "last": None}
 # last: {"success": bool, "output": str, "date": str | None}
