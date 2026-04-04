@@ -10,7 +10,7 @@ import markdown as md
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
@@ -20,7 +20,7 @@ SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "X", "scripts")
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 
 app = FastAPI()
-templates = Jinja2Templates(directory=TEMPLATES_DIR)
+jinja_env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), cache_size=0)
 
 # Ensure required directories exist (not in git)
 os.makedirs(NOTE_DIR, exist_ok=True)
@@ -40,13 +40,14 @@ def _get_articles() -> list[dict]:
     return result
 
 
+def render(template_name: str, **kwargs) -> HTMLResponse:
+    tmpl = jinja_env.get_template(template_name)
+    return HTMLResponse(tmpl.render(**kwargs))
+
+
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={"articles": _get_articles(), "job": _job},
-    )
+    return render("index.html", articles=_get_articles(), job=_job)
 
 
 @app.get("/articles/{date}", response_class=HTMLResponse)
@@ -59,11 +60,7 @@ async def article_detail(request: Request, date: str):
     with open(filepath, encoding="utf-8") as f:
         raw = f.read()
     content_html = md.markdown(raw, extensions=["tables", "fenced_code"])
-    return templates.TemplateResponse(
-        request=request,
-        name="article.html",
-        context={"date": date, "content": content_html, "raw": raw},
-    )
+    return render("article.html", date=date, content=content_html, raw=raw)
 
 
 @app.post("/api/generate")
