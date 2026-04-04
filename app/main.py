@@ -40,6 +40,7 @@ def _get_articles() -> list[dict]:
 
 
 @app.get("/", response_class=HTMLResponse)
+@app.head("/")
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {
         "request": request,
