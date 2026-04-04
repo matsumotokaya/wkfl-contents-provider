@@ -2,6 +2,37 @@
 
 **最終更新: 2026-04-04**
 
+---
+
+## 🚨 未解決の問題（引き継ぎ事項）
+
+### Render上でAnthropicAPIが `credit balance too low` エラーになる
+
+**症状**: Renderにデプロイしたアプリで記事生成を実行すると、以下のエラーが発生する。
+
+```
+anthropic.BadRequestError: Error code: 400
+'message': 'Your credit balance is too low to access the Anthropic API.'
+```
+
+**確認済み事項**:
+- Anthropicコンソールの残高: $9.91（十分にある）
+- RenderのAPIキー (`ANTHROPIC_API_KEY`): 正しい値が設定されている（`sk-ant-api03-R3raGo5kN7iCLuK-...NweoLwAA`）
+- ローカル実行: 正常に動作する（2026-04-04に実績あり、$0.09消費）
+- RenderはPython 3.11環境
+
+**未確認の仮説**:
+- Anthropicのワークスペースが複数あり、APIキーと残高が別ワークスペースに属している可能性
+- Anthropicコンソール → Settings → Workspaces で確認が必要
+
+**Web UIの状態**:
+- FastAPI + Jinja2で構築済み（`app/main.py`, `app/templates/`）
+- ローカルでは正常動作（`python3 -m uvicorn app.main:app --reload`）
+- Renderへのデプロイは完了しているが、上記APIエラーにより記事生成が失敗する
+- 記事の永続化（Renderはディスクが再起動で消える）は未実装 → GitHubへの自動コミット方式で解決予定
+
+---
+
 > このドキュメントは、本システムをゼロから引き継ぐLLMやエンジニアのための完全な仕様書です。
 
 ---
