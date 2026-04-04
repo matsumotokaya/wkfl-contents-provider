@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import threading
+import traceback
 from datetime import datetime
 
 import markdown as md
@@ -39,14 +40,16 @@ def _get_articles() -> list[dict]:
     return result
 
 
-@app.get("/", response_class=HTMLResponse)
-@app.head("/")
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "articles": _get_articles(),
-        "job": _job,
-    })
+    try:
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "articles": _get_articles(),
+            "job": _job,
+        })
+    except Exception as e:
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
 
 
 @app.get("/articles/{date}", response_class=HTMLResponse)
