@@ -87,9 +87,11 @@ def _run_pipeline():
             timeout=300,
             cwd=PROJECT_ROOT,
         )
+        output = (result.stdout + result.stderr)[-2000:]
+        success = result.returncode == 0 and "Pipeline halted" not in output and "Error in" not in output
         _job["last"] = {
-            "success": result.returncode == 0,
-            "output": (result.stdout + result.stderr)[-2000:],
+            "success": success,
+            "output": output,
             "date": datetime.now().strftime("%Y-%m-%d"),
         }
     except Exception as e:
