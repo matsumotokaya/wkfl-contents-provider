@@ -1,0 +1,91 @@
+name: Daily WKFL Briefing
+
+on:
+  schedule:
+    # 23:00 UTC = 08:00 JST (next day)
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: wkfl-daily-briefing
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: Asia/Tokyo
+      PYTHONUNBUFFERED: "1"
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate required secret
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "Missing secret: ANTHROPIC_API_KEY" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily pipeline
+        run: python X/scripts/run_all.py
+
+      - name: Resolve JST date and verify outputs
+        run: |
+          DATE_JST="$(TZ=Asia/Tokyo date +%F)"
+          NOTE_PATH="note/AI_Briefing_${DATE_JST}.md"
+          RAW_PATH="X/data/raw_feeds/${DATE_JST}_raw.json"
+
+          if [ ! -f "${NOTE_PATH}" ]; then
+            echo "Expected note file not found: ${NOTE_PATH}" >&2
+            exit 1
+          fi
+          if [ ! -f "${RAW_PATH}" ]; then
+            echo "Expected raw file not found: ${RAW_PATH}" >&2
+            exit 1
+          fi
+
+          echo "DATE_JST=${DATE_JST}" >> "$GITHUB_ENV"
+          echo "NOTE_PATH=${NOTE_PATH}" >> "$GITHUB_ENV"
+          echo "RAW_PATH=${RAW_PATH}" >> "$GITHUB_ENV"
+
+      - name: Upload generated files
+        uses: actions/upload-artifact@v4
+        with:
+          name: wkfl-briefing-${{ env.DATE_JST }}
+          path: |
+            ${{ env.NOTE_PATH }}
+            ${{ env.RAW_PATH }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish run summary
+        run: |
+          {
+            echo "## WKFL Daily Briefing"
+            echo ""
+            echo "- Date (JST): \`${DATE_JST}\`"
+            echo "- Note file: \`${NOTE_PATH}\`"
+            echo "- Raw file: \`${RAW_PATH}\`"
+            echo ""
+            echo "### Article preview (first 40 lines)"
+            echo ""
+            echo '```markdown'
+            sed -n '1,40p' "${NOTE_PATH}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

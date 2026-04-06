@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import sys
 from datetime import datetime
 from dotenv import load_dotenv
 from anthropic import Anthropic
@@ -17,6 +18,21 @@ CONFIG_PATH = os.path.join(BASE_DIR, "..", "data", "db", "user_config.json")
 # Environment variable override: WKFL_MODEL=claude-opus-4-6
 DEFAULT_MODEL = "claude-sonnet-4-6"
 
+
+def format_japanese_date(dt):
+    """Format a date as '4月5日(日曜日)'."""
+    weekdays = [
+        "月曜日",
+        "火曜日",
+        "水曜日",
+        "木曜日",
+        "金曜日",
+        "土曜日",
+        "日曜日",
+    ]
+    return f"{dt.month}月{dt.day}日({weekdays[dt.weekday()]})"
+
+
 # --- CORNER-BASED PODCAST STYLE PROMPT ---
 SYNTHESIS_PROMPT_TEMPLATE = """
 # System Prompt: AI Podcast Personality 'WKFL' (Corner-based Edition)
@@ -31,7 +47,7 @@ From the past 24 hours of Reddit discussions (RAW DATA below), select news for 3
 
 ## Format (follow this structure exactly):
 
-1. **Title**: 朝イチAIキャッチアップ({today_date})
+1. **Title**: 【日刊】AIキャッチアップ最前線 | {today_date}
 2. **Intro**:
    「こんにちはーWKFLです。今日も朝イチのAIキャッチアップ、やっていきましょう。{today_date}、 朝8時の時点で集計されたRedditのトピックス。ディープな最新情報があるのはやはりReddit。ただし英語だし情報量も更新頻度も早すぎてもはやカオス。 ということで厳選したスレッドから気になるネタをいくつか、デイリーで紹介する取り組みを始めました。マクロなトレンド、Redditならではのハック、そして我々のテーマである『AI駆動開発』に関する最新情報という、3つのコーナーに分けてお届けします。それでは、いってみましょう〜」
 
@@ -147,7 +163,7 @@ def synthesize(raw_json_path, model=None):
     with open(raw_json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    today_date = datetime.now().strftime("%m/%d")
+    today_date = format_japanese_date(datetime.now())
 
     # Pre-filter
     filtered = prefilter_entries(data)
@@ -184,9 +200,9 @@ def main():
     out_path = os.path.join(out_dir, f"AI_Briefing_{today}.md")
 
     if not os.path.exists(raw_path):
-        print(f"No raw data found for today ({raw_path}).")
-        print("Run ingest_rss.py first.")
-        return
+        print(f"No raw data found for today ({raw_path}).", file=sys.stderr)
+        print("Run ingest_rss.py first.", file=sys.stderr)
+        return 1
 
     article = synthesize(raw_path)
 
@@ -194,7 +210,8 @@ def main():
         f.write(article)
 
     print(f"\n✅ Generated article -> {out_path}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

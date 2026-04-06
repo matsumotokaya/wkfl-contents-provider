@@ -4,6 +4,7 @@ import os
 import time
 import urllib.request
 import ssl
+import sys
 from datetime import datetime
 
 # --- PATH CONFIGURATION ---
@@ -21,9 +22,13 @@ def load_feeds_from_db():
 def fetch_feeds():
     os.makedirs(RAW_DATA_DIR, exist_ok=True)
     feeds = load_feeds_from_db()
-    
+
+    if not feeds:
+        print("No active RSS sources found in user_config.json.", file=sys.stderr)
+        return None
+
     all_entries = []
-    
+
     # RedditのブロックとSSLエラーを強引に突破するための設定
     # 1. SSL証明書の検証を無効化 (Mac環境への対応)
     context = ssl._create_unverified_context()
@@ -76,9 +81,13 @@ def fetch_feeds():
     
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(list(unique_entries), f, indent=2, ensure_ascii=False)
-    
+
+    if not unique_entries:
+        print(f"\nERROR: No feed entries captured. Wrote empty file to {output_path}", file=sys.stderr)
+        return None
+
     print(f"\n✅ SUCCESS: Total {len(unique_entries)} items captured in {output_path}")
     return output_path
 
 if __name__ == "__main__":
-    fetch_feeds()
+    raise SystemExit(0 if fetch_feeds() else 1)
