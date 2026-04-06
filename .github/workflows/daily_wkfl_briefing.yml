@@ -83,9 +83,9 @@ jobs:
             echo "- Note file: \`${NOTE_PATH}\`"
             echo "- Raw file: \`${RAW_PATH}\`"
             echo ""
-            echo "### Article preview (first 40 lines)"
+            echo "### Full Article"
             echo ""
             echo '```markdown'
-            sed -n '1,40p' "${NOTE_PATH}"
+            cat "${NOTE_PATH}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
