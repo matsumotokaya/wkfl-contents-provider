@@ -2,8 +2,8 @@ name: Daily WKFL Briefing
 
 on:
   schedule:
-    # 23:00 UTC = 08:00 JST (next day)
-    - cron: "0 23 * * *"
+    # 22:00 UTC = 07:00 JST (next day)
+    - cron: "0 22 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -48,11 +48,21 @@ jobs:
       - name: Resolve JST date and verify outputs
         run: |
           DATE_JST="$(TZ=Asia/Tokyo date +%F)"
-          NOTE_PATH="note/AI_Briefing_${DATE_JST}.md"
+          ARTICLE_PATH="articles/${DATE_JST}/reddit.md"
+          PODCAST_PATH="articles/${DATE_JST}/reddit_podcast.md"
+          DOSSIER_PATH="articles/${DATE_JST}/reddit_dossier.md"
           RAW_PATH="X/data/raw_feeds/${DATE_JST}_raw.json"
 
-          if [ ! -f "${NOTE_PATH}" ]; then
-            echo "Expected note file not found: ${NOTE_PATH}" >&2
+          if [ ! -f "${ARTICLE_PATH}" ]; then
+            echo "Expected article file not found: ${ARTICLE_PATH}" >&2
+            exit 1
+          fi
+          if [ ! -f "${PODCAST_PATH}" ]; then
+            echo "Expected podcast file not found: ${PODCAST_PATH}" >&2
+            exit 1
+          fi
+          if [ ! -f "${DOSSIER_PATH}" ]; then
+            echo "Expected dossier file not found: ${DOSSIER_PATH}" >&2
             exit 1
           fi
           if [ ! -f "${RAW_PATH}" ]; then
@@ -61,7 +71,9 @@ jobs:
           fi
 
           echo "DATE_JST=${DATE_JST}" >> "$GITHUB_ENV"
-          echo "NOTE_PATH=${NOTE_PATH}" >> "$GITHUB_ENV"
+          echo "ARTICLE_PATH=${ARTICLE_PATH}" >> "$GITHUB_ENV"
+          echo "PODCAST_PATH=${PODCAST_PATH}" >> "$GITHUB_ENV"
+          echo "DOSSIER_PATH=${DOSSIER_PATH}" >> "$GITHUB_ENV"
           echo "RAW_PATH=${RAW_PATH}" >> "$GITHUB_ENV"
 
       - name: Upload generated files
@@ -69,7 +81,9 @@ jobs:
         with:
           name: wkfl-briefing-${{ env.DATE_JST }}
           path: |
-            ${{ env.NOTE_PATH }}
+            ${{ env.ARTICLE_PATH }}
+            ${{ env.PODCAST_PATH }}
+            ${{ env.DOSSIER_PATH }}
             ${{ env.RAW_PATH }}
           if-no-files-found: error
           retention-days: 30
@@ -80,12 +94,14 @@ jobs:
             echo "## WKFL Daily Briefing"
             echo ""
             echo "- Date (JST): \`${DATE_JST}\`"
-            echo "- Note file: \`${NOTE_PATH}\`"
+            echo "- Article file: \`${ARTICLE_PATH}\`"
+            echo "- Podcast file: \`${PODCAST_PATH}\`"
+            echo "- Dossier file: \`${DOSSIER_PATH}\`"
             echo "- Raw file: \`${RAW_PATH}\`"
             echo ""
             echo "### Full Article"
             echo ""
             echo '```markdown'
-            cat "${NOTE_PATH}"
+            cat "${ARTICLE_PATH}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

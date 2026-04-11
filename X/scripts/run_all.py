@@ -26,7 +26,7 @@ def main():
     # Core pipeline: ingest -> synthesize
     pipeline = [
         ("RSS Ingestion", "ingest_rss.py"),
-        ("Note Synthesis", "synthesize_note.py"),
+        ("Reddit Synthesis", "synthesize_note.py"),
     ]
 
     for step_name, script_file in pipeline:

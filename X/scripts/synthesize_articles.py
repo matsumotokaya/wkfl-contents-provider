@@ -11,6 +11,22 @@ from anthropic import Anthropic
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
+from wkfl_pipeline import (
+    FACT_MAX_TOKENS,
+    PODCAST_MAX_TOKENS,
+    STYLE_MAX_TOKENS,
+    build_podcast_script_prompt,
+    build_selected_article_prompt,
+    build_selected_dossier_prompt,
+    call_model,
+    extract_title,
+    format_japanese_date,
+    format_japanese_spoken_date,
+    format_slash_date,
+    prepend_title_to_podcast,
+    resolve_models,
+)
+
 # --- LOAD .env ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
@@ -26,67 +42,6 @@ USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
 )
-
-ARTICLE_PROMPT_TEMPLATE = """
-# System Prompt: AI Podcast Personality 'WKFL' (Spot Article Edition)
-
-## Your Persona:
-You are "WKFL", the AI podcast personality.
-- You are a podcaster who is also a working entrepreneur in your 40s.
-- Tone: natural spoken Japanese with intelligence, warmth, humor, and a slightly oversized sense of drama.
-- Commentary: objective summary first, then a human, witty, occasionally hesitant, and at times brutally sharp opinion from the perspective of an AI product entrepreneur / developer.
-
-## Task:
-From the source articles below, create a Japanese spot briefing.
-- Use exactly one item per source article.
-- Preserve the input order.
-- This is not a Reddit roundup. Treat each source as a published article.
-
-## Format (follow this structure exactly):
-
-1. **Title**: 【スポット】AIキャッチアップ最前線 | {today_date}
-2. **Intro**:
-   皆さんこんにちはー、WKFLです。今日もAI、回してますか？ということで、朝イチのAIキャッチアップ、やっていきましょう。今日は気になった記事を{article_count}本ピックアップして、概要と所感をまとめていきます。Redditの定点観測とは別に、WKFLが独自の観点でセレクトしたメディア記事や技術ブログを皆さんと一緒に、見ていきたいと思います。それでは、いってみましょう。
-
-3. **Body**:
-   For each article, output:
-   - ### ■ [Title]
-   - **[ソース紹介]**
-     これは[媒体名]の[公開日]の記事です。
-   - **[概要]** (~250-350 Japanese chars)
-   - **[WKFLの感想]** (~250-350 Japanese chars)
-   - Source: [記事タイトル](URL)
-
-4. **Outro**:
-   以上になります。今回は、いま一番気になるニュースから、AI業界の流れを追ってみました。他にも、取り上げてほしいトピックスやツールがあれば是非コメントください。では、また次回お会いしましょう。
-
-## Rules:
-- Use ONLY the source data below. Do not fabricate facts.
-- If the source text is insufficient or missing, do not infer or reconstruct it; report that the article could not be fully retrieved.
-- In **[ソース紹介]**, mention the media name and publication date naturally.
-- If the publication date is unknown, write "公開日の確認が取れない記事です" instead.
-- **[概要]** must be factual and concise.
-- **[WKFLの感想]** must sound like a highly informed entrepreneur-podcaster in his 40s: witty, human, slightly theatrical, sometimes hesitant in phrasing, but capable of sharp critique.
-- Output language: Japanese.
-- Output format: Markdown.
-
-## SOURCE ARTICLES:
-{article_content}
-"""
-
-
-def format_japanese_date(dt):
-    weekdays = [
-        "月曜日",
-        "火曜日",
-        "水曜日",
-        "木曜日",
-        "金曜日",
-        "土曜日",
-        "日曜日",
-    ]
-    return f"{dt.month}月{dt.day}日({weekdays[dt.weekday()]})"
-
 
 def clean_text(text):
     text = re.sub(r"\s+", " ", text or "")
@@ -296,7 +251,47 @@ def extract_metadata(url, html):
     }
 
 
-def build_prompt(articles, today_date):
+def normalize_manual_article(article):
+    published_jp = article.get("published_jp")
+    if not published_jp:
+        published_jp = format_publication_date(
+            article.get("published_raw") or article.get("published") or article.get("date")
+        )
+    return {
+        "url": article.get("url", ""),
+        "site_name": normalize_site_name(article.get("site_name") or article.get("media") or "Manual Source"),
+        "title": article.get("title", ""),
+        "published_raw": article.get("published_raw") or article.get("published") or article.get("date", ""),
+        "published_jp": published_jp,
+        "content": clean_text(article.get("content", ""))[:6000],
+    }
+
+
+def load_manual_articles(paths):
+    articles = []
+    for path in paths:
+        with open(path, "r", encoding="utf-8") as file:
+            payload = json.load(file)
+        if isinstance(payload, dict):
+            payload = [payload]
+        for item in payload:
+            articles.append(normalize_manual_article(item))
+    return articles
+
+
+def resolve_edition_datetime(edition_date):
+    if not edition_date:
+        return datetime.now()
+    return datetime.strptime(edition_date, "%Y-%m-%d")
+
+
+def write_text(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as file:
+        file.write(content)
+
+
+def render_article_content(articles):
     chunks = []
     for index, article in enumerate(articles, start=1):
         publication_line = article["published_jp"] or "公開日の確認が取れていない"
@@ -313,15 +308,12 @@ def build_prompt(articles, today_date):
             )
         )
 
-    return ARTICLE_PROMPT_TEMPLATE.format(
-        today_date=today_date,
-        article_count=len(articles),
-        article_content="\n".join(chunks),
-    )
+    return "\n".join(chunks)
 
 
-def synthesize_articles(urls, model=None):
-    model = model or os.environ.get("WKFL_MODEL", DEFAULT_MODEL)
+def synthesize_articles(urls, model=None, edition_date=None, manual_article_files=None):
+    fact_model, style_model = resolve_models(DEFAULT_MODEL, model)
+    manual_article_files = manual_article_files or []
 
     articles = []
     for url in urls:
@@ -340,24 +332,50 @@ def synthesize_articles(urls, model=None):
         )
         articles.append(article)
 
-    today_date = format_japanese_date(datetime.now())
-    prompt = build_prompt(articles, today_date)
-    prompt_tokens_est = len(prompt) // 4
-    print(f"Estimated input tokens: ~{prompt_tokens_est:,}")
-    print(f"Calling {model}...")
-
+    articles.extend(load_manual_articles(manual_article_files))
+    edition_dt = resolve_edition_datetime(edition_date)
+    today_date = format_japanese_date(edition_dt)
+    spoken_date = format_japanese_spoken_date(edition_dt)
+    slash_date = format_slash_date(edition_dt)
     client = Anthropic()
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
+    article_content = render_article_content(articles)
+
+    dossier_prompt = build_selected_dossier_prompt(
+        article_content,
+        today_date,
+        len(articles),
+    )
+    print(f"Estimated stage 1 input tokens: ~{len(dossier_prompt) // 4:,}")
+    dossier, _ = call_model(
+        client,
+        fact_model,
+        dossier_prompt,
+        FACT_MAX_TOKENS,
+        "Stage 1 dossier",
     )
 
-    article = response.content[0].text
-    usage = response.usage
-    print(f"Actual usage: input={usage.input_tokens:,} output={usage.output_tokens:,}")
+    article_prompt = build_selected_article_prompt(dossier, today_date, spoken_date, slash_date)
+    print(f"Estimated stage 2 input tokens: ~{len(article_prompt) // 4:,}")
+    article, _ = call_model(
+        client,
+        style_model,
+        article_prompt,
+        STYLE_MAX_TOKENS,
+        "Stage 2 article",
+    )
 
-    return article
+    podcast_prompt = build_podcast_script_prompt(article, spoken_date)
+    print(f"Estimated stage 3 input tokens: ~{len(podcast_prompt) // 4:,}")
+    podcast_script_raw, _ = call_model(
+        client,
+        style_model,
+        podcast_prompt,
+        PODCAST_MAX_TOKENS,
+        "Stage 3 podcast script",
+    )
+    podcast_script = prepend_title_to_podcast(podcast_script_raw, extract_title(article))
+
+    return dossier, article, podcast_script
 
 
 def parse_args():
@@ -367,24 +385,41 @@ def parse_args():
     parser.add_argument("urls", nargs="+", help="Article URLs to summarize")
     parser.add_argument(
         "--output",
-        help="Optional output path. Defaults to note/Spot_Briefing_YYYY-MM-DD_HHMM.md",
+        help="Optional output path. Defaults to articles/YYYY-MM-DD/articles.md",
+    )
+    parser.add_argument(
+        "--edition-date",
+        help="Article edition date in YYYY-MM-DD. Useful when preparing tomorrow's briefing in advance.",
+    )
+    parser.add_argument(
+        "--manual-article-file",
+        action="append",
+        default=[],
+        help="Path to a JSON file containing one manual article object or a list of article objects.",
     )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M")
-    out_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "..", "note"))
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = args.output or os.path.join(out_dir, f"Spot_Briefing_{timestamp}.md")
+    timestamp_base = args.edition_date or datetime.now().strftime("%Y-%m-%d")
+    timestamp = f"{timestamp_base}_{datetime.now().strftime('%H%M')}"
 
-    article = synthesize_articles(args.urls)
+    dossier, article, podcast_script = synthesize_articles(
+        args.urls,
+        edition_date=args.edition_date,
+        manual_article_files=args.manual_article_file,
+    )
 
-    with open(out_path, "w", encoding="utf-8") as file:
-        file.write(article)
+    article_dir = os.path.abspath(os.path.join(PROJECT_ROOT, "articles", timestamp_base))
+    article_path = args.output or os.path.join(article_dir, "articles.md")
+    podcast_path = os.path.join(article_dir, "articles_podcast.md")
+    dossier_path = os.path.join(article_dir, "articles_dossier.md")
+    write_text(article_path, article)
+    write_text(podcast_path, podcast_script)
+    write_text(dossier_path, dossier)
 
-    print(f"\n✅ Generated article -> {out_path}")
+    print(f"\n✅ Saved article bundle -> {article_dir}")
 
 
 if __name__ == "__main__":

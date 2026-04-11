@@ -1,0 +1,6 @@
+feedparser
+tweepy
+anthropic
+google-generativeai
+python-dotenv
+requests

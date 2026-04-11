@@ -3,8 +3,24 @@ import os
 import re
 import sys
 from datetime import datetime
-from dotenv import load_dotenv
 from anthropic import Anthropic
+from dotenv import load_dotenv
+
+from wkfl_pipeline import (
+    FACT_MAX_TOKENS,
+    PODCAST_MAX_TOKENS,
+    STYLE_MAX_TOKENS,
+    build_podcast_script_prompt,
+    build_reddit_article_prompt,
+    build_reddit_dossier_prompt,
+    call_model,
+    extract_title,
+    format_japanese_date,
+    format_japanese_spoken_date,
+    format_slash_date,
+    prepend_title_to_podcast,
+    resolve_models,
+)
 
 # --- LOAD .env ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -17,74 +33,6 @@ CONFIG_PATH = os.path.join(BASE_DIR, "..", "data", "db", "user_config.json")
 # --- MODEL CONFIGURATION ---
 # Environment variable override: WKFL_MODEL=claude-opus-4-6
 DEFAULT_MODEL = "claude-sonnet-4-6"
-
-
-def format_japanese_date(dt):
-    """Format a date as '4月5日(日曜日)'."""
-    weekdays = [
-        "月曜日",
-        "火曜日",
-        "水曜日",
-        "木曜日",
-        "金曜日",
-        "土曜日",
-        "日曜日",
-    ]
-    return f"{dt.month}月{dt.day}日({weekdays[dt.weekday()]})"
-
-
-# --- CORNER-BASED PODCAST STYLE PROMPT ---
-SYNTHESIS_PROMPT_TEMPLATE = """
-# System Prompt: AI Podcast Personality 'WKFL' (Corner-based Edition)
-
-## Your Persona:
-You are "WKFL", the AI podcast personality.
-- You are a podcaster who is also a working entrepreneur in your 40s.
-- Intro/outro: relaxed, natural spoken tone with intelligence, warmth, and a slightly oversized sense of drama.
-- News commentary: objective ~300 chars.
-- WKFL's Eye: ~300 chars from the perspective of an AI entrepreneur/developer, with humor, occasional human hesitations or ambiguity, and at times brutally sharp criticism.
-
-## Task:
-From the past 24 hours of Reddit discussions (RAW DATA below), select news for 3 "corners", picking 1-2 items each (3-6 total).
-
-## Format (follow this structure exactly):
-
-1. **Title**: 【日刊】朝イチ！AIキャッチアップ | {today_date}
-2. **Intro**:
-   皆さんこんにちはー、WKFLです。今日もAI、回してますか？ということで、朝イチのAIキャッチアップ、やっていきましょう。いつも通り、{today_date}、 直近２４時間のRedditにおけるディープな議論をまとめました。ただの最新ニュースではなく、世界のAIオタクによる熱い議論が読めるのはやはりReddit。マクロなトレンド、Redditならではのハック、そして我々のテーマである『AI駆動開発』に関する最新情報という、3つのコーナーに分けてお届けします。それでは、はじめましょう。
-
-3. **【Macro AI Trends】マクロなAIトレンド・市況**
-   (Industry-wide macro trends, big company announcements, model evolution, policy — 1-2 items)
-   - ### ■ [Title] (Source: [subreddit with link])
-   - **[議論の概要]** (~300 chars)
-   - **[WKFLの感想]** (~300 chars)
-
-4. **【Reddit's Lab】局地的な面白ニュース・ハック**
-   (Individual experiments, community hacks, weird builds — 1-2 items)
-   - ### ■ [Title] (Source: [subreddit with link])
-   - **[議論の概要]** (~300 chars)
-   - **[WKFLの感想]** (~300 chars)
-
-5. **【AI Coding】AI駆動開発の最前線**
-   (Vibe coding, AI-driven development tools, coding agent progress — 1-2 items)
-   - ### ■ [Title] (Source: [subreddit with link])
-   - **[議論の概要]** (~300 chars)
-   - **[WKFLの感想]** (~300 chars)
-
-6. **Outro**:
-   「本日提供のネタは以上となります。 マクロなトレンドと、現場のハックが混在しているのがRedditの面白いところですね。では、また明日お会いしましょう。」
-
-## Rules:
-- Use ONLY information from the RAW DATA. Never fabricate sources or facts.
-- Each [議論の概要] must be objective and factual.
-- Each [WKFLの感想] must sound like a highly informed entrepreneur-podcaster in his 40s: witty, human, slightly theatrical, sometimes hesitant in phrasing, but capable of sharp critique.
-- Source links must come from the actual data.
-- Output language: Japanese.
-- Output format: Markdown.
-
-## RAW DATA:
-{raw_content}
-"""
 
 
 def strip_html(text):
@@ -143,75 +91,96 @@ def prefilter_entries(entries):
     return filtered
 
 
-def build_prompt(entries, today_date):
-    """Build the synthesis prompt with filtered data."""
+def render_raw_content(entries):
+    """Render filtered Reddit data for the two-stage prompts."""
     raw_content = ""
     for i, entry in enumerate(entries, 1):
         raw_content += f"\n---\n#{i}. [{entry['source']}] {entry['title']}\n"
         raw_content += f"Link: {entry['link']}\n"
         raw_content += f"Published: {entry.get('published', 'unknown')}\n"
         raw_content += f"Content: {entry['summary']}\n"
+    return raw_content
 
-    return SYNTHESIS_PROMPT_TEMPLATE.format(
-        today_date=today_date,
-        raw_content=raw_content,
-    )
+
+def write_text(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as file:
+        file.write(content)
 
 
 def synthesize(raw_json_path, model=None):
-    """Call the Anthropic API to generate the article."""
-    model = model or os.environ.get("WKFL_MODEL", DEFAULT_MODEL)
+    """Generate the final Reddit article through a two-stage pipeline."""
+    fact_model, style_model = resolve_models(DEFAULT_MODEL, model)
 
     with open(raw_json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    today_date = format_japanese_date(datetime.now())
+    edition_dt = datetime.now()
+    today_date = format_japanese_date(edition_dt)
+    spoken_date = format_japanese_spoken_date(edition_dt)
+    slash_date = format_slash_date(edition_dt)
 
     # Pre-filter
     filtered = prefilter_entries(data)
     print(f"Pre-filtered: {len(data)} -> {len(filtered)} entries")
 
-    # Build prompt
-    prompt = build_prompt(filtered, today_date)
-    prompt_tokens_est = len(prompt) // 4  # rough estimate
-    print(f"Estimated input tokens: ~{prompt_tokens_est:,}")
-
-    # Call Anthropic API
-    print(f"Calling {model}...")
     client = Anthropic()
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
+    raw_content = render_raw_content(filtered)
+
+    dossier_prompt = build_reddit_dossier_prompt(raw_content, today_date)
+    print(f"Estimated stage 1 input tokens: ~{len(dossier_prompt) // 4:,}")
+    dossier, _ = call_model(
+        client,
+        fact_model,
+        dossier_prompt,
+        FACT_MAX_TOKENS,
+        "Stage 1 dossier",
     )
 
-    article = response.content[0].text
+    article_prompt = build_reddit_article_prompt(dossier, today_date, spoken_date, slash_date)
+    print(f"Estimated stage 2 input tokens: ~{len(article_prompt) // 4:,}")
+    article, _ = call_model(
+        client,
+        style_model,
+        article_prompt,
+        STYLE_MAX_TOKENS,
+        "Stage 2 article",
+    )
 
-    # Report usage
-    usage = response.usage
-    print(f"Actual usage: input={usage.input_tokens:,} output={usage.output_tokens:,}")
+    podcast_prompt = build_podcast_script_prompt(article, spoken_date)
+    print(f"Estimated stage 3 input tokens: ~{len(podcast_prompt) // 4:,}")
+    podcast_script_raw, _ = call_model(
+        client,
+        style_model,
+        podcast_prompt,
+        PODCAST_MAX_TOKENS,
+        "Stage 3 podcast script",
+    )
+    podcast_script = prepend_title_to_podcast(podcast_script_raw, extract_title(article))
 
-    return article
+    return dossier, article, podcast_script
 
 
 def main():
     today = datetime.now().strftime("%Y-%m-%d")
     raw_path = os.path.join(BASE_DIR, "..", "data", "raw_feeds", f"{today}_raw.json")
-    out_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "..", "note"))
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, f"AI_Briefing_{today}.md")
 
     if not os.path.exists(raw_path):
         print(f"No raw data found for today ({raw_path}).", file=sys.stderr)
         print("Run ingest_rss.py first.", file=sys.stderr)
         return 1
 
-    article = synthesize(raw_path)
+    dossier, article, podcast_script = synthesize(raw_path)
 
-    with open(out_path, 'w', encoding='utf-8') as f:
-        f.write(article)
+    article_dir = os.path.abspath(os.path.join(PROJECT_ROOT, "articles", today))
+    article_path = os.path.join(article_dir, "reddit.md")
+    podcast_path = os.path.join(article_dir, "reddit_podcast.md")
+    dossier_path = os.path.join(article_dir, "reddit_dossier.md")
+    write_text(article_path, article)
+    write_text(podcast_path, podcast_script)
+    write_text(dossier_path, dossier)
 
-    print(f"\n✅ Generated article -> {out_path}")
+    print(f"\n✅ Saved article bundle -> {article_dir}")
     return 0
 
 

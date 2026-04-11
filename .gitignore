@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 *.pyo
+*.DS_Store
+articles/
 note/
 X/data/raw_feeds/
 Brain/
