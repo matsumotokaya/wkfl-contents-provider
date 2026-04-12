@@ -7,7 +7,6 @@ import urllib.request
 from datetime import datetime
 from urllib.parse import urlparse
 
-from anthropic import Anthropic
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
@@ -35,7 +34,7 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- MODEL CONFIGURATION ---
-DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = "gpt-5.4"
 MIN_ARTICLE_CONTENT_CHARS = 1000
 
 USER_AGENT = (
@@ -337,7 +336,6 @@ def synthesize_articles(urls, model=None, edition_date=None, manual_article_file
     today_date = format_japanese_date(edition_dt)
     spoken_date = format_japanese_spoken_date(edition_dt)
     slash_date = format_slash_date(edition_dt)
-    client = Anthropic()
     article_content = render_article_content(articles)
 
     dossier_prompt = build_selected_dossier_prompt(
@@ -347,7 +345,6 @@ def synthesize_articles(urls, model=None, edition_date=None, manual_article_file
     )
     print(f"Estimated stage 1 input tokens: ~{len(dossier_prompt) // 4:,}")
     dossier, _ = call_model(
-        client,
         fact_model,
         dossier_prompt,
         FACT_MAX_TOKENS,
@@ -357,7 +354,6 @@ def synthesize_articles(urls, model=None, edition_date=None, manual_article_file
     article_prompt = build_selected_article_prompt(dossier, today_date, spoken_date, slash_date)
     print(f"Estimated stage 2 input tokens: ~{len(article_prompt) // 4:,}")
     article, _ = call_model(
-        client,
         style_model,
         article_prompt,
         STYLE_MAX_TOKENS,
@@ -367,7 +363,6 @@ def synthesize_articles(urls, model=None, edition_date=None, manual_article_file
     podcast_prompt = build_podcast_script_prompt(article, spoken_date)
     print(f"Estimated stage 3 input tokens: ~{len(podcast_prompt) // 4:,}")
     podcast_script_raw, _ = call_model(
-        client,
         style_model,
         podcast_prompt,
         PODCAST_MAX_TOKENS,

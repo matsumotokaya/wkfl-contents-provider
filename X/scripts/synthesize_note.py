@@ -3,7 +3,6 @@ import os
 import re
 import sys
 from datetime import datetime
-from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from wkfl_pipeline import (
@@ -31,8 +30,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "..", "data", "db", "user_config.json")
 
 # --- MODEL CONFIGURATION ---
-# Environment variable override: WKFL_MODEL=claude-opus-4-6
-DEFAULT_MODEL = "claude-sonnet-4-6"
+# Environment variable override: WKFL_MODEL=gpt-5.4
+DEFAULT_MODEL = "gpt-5.4"
 
 
 def strip_html(text):
@@ -124,13 +123,11 @@ def synthesize(raw_json_path, model=None):
     filtered = prefilter_entries(data)
     print(f"Pre-filtered: {len(data)} -> {len(filtered)} entries")
 
-    client = Anthropic()
     raw_content = render_raw_content(filtered)
 
     dossier_prompt = build_reddit_dossier_prompt(raw_content, today_date)
     print(f"Estimated stage 1 input tokens: ~{len(dossier_prompt) // 4:,}")
     dossier, _ = call_model(
-        client,
         fact_model,
         dossier_prompt,
         FACT_MAX_TOKENS,
@@ -140,7 +137,6 @@ def synthesize(raw_json_path, model=None):
     article_prompt = build_reddit_article_prompt(dossier, today_date, spoken_date, slash_date)
     print(f"Estimated stage 2 input tokens: ~{len(article_prompt) // 4:,}")
     article, _ = call_model(
-        client,
         style_model,
         article_prompt,
         STYLE_MAX_TOKENS,
@@ -150,7 +146,6 @@ def synthesize(raw_json_path, model=None):
     podcast_prompt = build_podcast_script_prompt(article, spoken_date)
     print(f"Estimated stage 3 input tokens: ~{len(podcast_prompt) // 4:,}")
     podcast_script_raw, _ = call_model(
-        client,
         style_model,
         podcast_prompt,
         PODCAST_MAX_TOKENS,

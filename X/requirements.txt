@@ -1,6 +1,7 @@
 feedparser
 tweepy
 anthropic
+openai
 google-generativeai
 python-dotenv
 requests

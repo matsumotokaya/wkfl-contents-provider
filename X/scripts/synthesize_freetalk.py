@@ -3,7 +3,6 @@ import os
 import sys
 from datetime import datetime
 
-from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from wkfl_pipeline import (
@@ -26,7 +25,7 @@ from wkfl_pipeline import (
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
-DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = "gpt-5.4"
 
 
 def write_text(path, content):
@@ -47,19 +46,17 @@ def synthesize_freetalk(raw_notes, model=None, edition_date=None):
     spoken_date = format_japanese_spoken_date(edition_dt)
     slash_date = format_slash_date(edition_dt)
 
-    client = Anthropic()
-
     dossier_prompt = build_freetalk_dossier_prompt(raw_notes, today_date)
     print(f"Estimated stage 1 input tokens: ~{len(dossier_prompt) // 4:,}")
-    dossier, _ = call_model(client, fact_model, dossier_prompt, FACT_MAX_TOKENS, "Stage 1 dossier")
+    dossier, _ = call_model(fact_model, dossier_prompt, FACT_MAX_TOKENS, "Stage 1 dossier")
 
     article_prompt = build_freetalk_article_prompt(dossier, today_date, spoken_date, slash_date)
     print(f"Estimated stage 2 input tokens: ~{len(article_prompt) // 4:,}")
-    article, _ = call_model(client, style_model, article_prompt, STYLE_MAX_TOKENS, "Stage 2 article")
+    article, _ = call_model(style_model, article_prompt, STYLE_MAX_TOKENS, "Stage 2 article")
 
     podcast_prompt = build_freetalk_podcast_script_prompt(article)
     print(f"Estimated stage 3 input tokens: ~{len(podcast_prompt) // 4:,}")
-    podcast_script_raw, _ = call_model(client, style_model, podcast_prompt, PODCAST_MAX_TOKENS, "Stage 3 podcast script")
+    podcast_script_raw, _ = call_model(style_model, podcast_prompt, PODCAST_MAX_TOKENS, "Stage 3 podcast script")
     podcast_script = prepend_title_to_podcast(podcast_script_raw, extract_title(article))
 
     return dossier, article, podcast_script

@@ -20,7 +20,9 @@ jobs:
     env:
       TZ: Asia/Tokyo
       PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      WKFL_MODEL: ${{ secrets.OPENAI_API_KEY != '' && 'gpt-5.4' || 'claude-sonnet-4-6' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,7 +34,11 @@ jobs:
 
       - name: Validate required secret
         run: |
-          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+          if [ "${WKFL_MODEL}" = "gpt-5.4" ] && [ -z "${OPENAI_API_KEY}" ]; then
+            echo "Missing secret: OPENAI_API_KEY" >&2
+            exit 1
+          fi
+          if [ "${WKFL_MODEL}" != "gpt-5.4" ] && [ -z "${ANTHROPIC_API_KEY}" ]; then
             echo "Missing secret: ANTHROPIC_API_KEY" >&2
             exit 1
           fi

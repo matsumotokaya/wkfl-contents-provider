@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 
 from anthropic import Anthropic
+from openai import OpenAI
 
 from wkfl_persona import WKFL_PERSONA_BLOCK
 
@@ -35,22 +36,68 @@ def resolve_models(default_model: str, override_model: str | None = None) -> tup
     return fact_model, style_model
 
 
+def is_openai_model(model: str) -> bool:
+    return model.startswith("gpt-")
+
+
+def _read_api_key(env_name: str) -> str:
+    api_key = os.environ.get(env_name)
+    if not api_key:
+        raise RuntimeError(f"Missing required environment variable: {env_name}")
+    return api_key
+
+
+def _read_usage_tokens(usage: object) -> tuple[int | None, int | None]:
+    if usage is None:
+        return None, None
+    input_tokens = getattr(usage, "input_tokens", None)
+    output_tokens = getattr(usage, "output_tokens", None)
+    return input_tokens, output_tokens
+
+
+def _resolve_openai_reasoning_effort(label: str) -> str:
+    label_lower = label.lower()
+    if "stage 1" in label_lower:
+        return os.environ.get("WKFL_FACT_REASONING_EFFORT", "low")
+    if "stage 2" in label_lower:
+        return os.environ.get("WKFL_STYLE_REASONING_EFFORT", "medium")
+    if "stage 3" in label_lower:
+        return os.environ.get("WKFL_PODCAST_REASONING_EFFORT", "low")
+    return os.environ.get("WKFL_OPENAI_REASONING_EFFORT", "medium")
+
+
 def call_model(
-    client: Anthropic,
     model: str,
     prompt: str,
     max_tokens: int,
     label: str,
 ) -> tuple[str, object]:
     print(f"Calling {label} with {model}...")
-    response = client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = response.content[0].text
-    usage = response.usage
-    print(f"{label} usage: input={usage.input_tokens:,} output={usage.output_tokens:,}")
+    if is_openai_model(model):
+        client = OpenAI(api_key=_read_api_key("OPENAI_API_KEY"))
+        response = client.responses.create(
+            model=model,
+            input=prompt,
+            max_output_tokens=max_tokens,
+            reasoning={"effort": _resolve_openai_reasoning_effort(label)},
+        )
+        text = response.output_text
+        usage = response.usage
+    else:
+        client = Anthropic(api_key=_read_api_key("ANTHROPIC_API_KEY"))
+        response = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text
+        usage = response.usage
+
+    input_tokens, output_tokens = _read_usage_tokens(usage)
+    if input_tokens is not None and output_tokens is not None:
+        print(f"{label} usage: input={input_tokens:,} output={output_tokens:,}")
+    else:
+        print(f"{label} usage: token details unavailable")
     return text, usage
 
 
@@ -73,13 +120,16 @@ TITLE_FORMAT_INSTRUCTION = """
 ## Title Format (CRITICAL):
 - The article title must follow this exact format:
   `{slash_date} | 最新AIニュース | [keywords]`
-- Total length: ~50 Japanese characters (the prefix `{slash_date} | 最新AIニュース | ` is already ~16 chars, so keywords should be ~34 chars)
-- Keywords: extract 2-4 key topic words or short phrases from the article content, separated by spaces or commas
-- No emojis anywhere in the title
+- Total length target: 46-54 Japanese characters, aiming to land close to 50.
+- The prefix `{slash_date} | 最新AIニュース | ` is already about 16 chars, so the keyword block should usually be about 30-38 Japanese characters.
+- Use 3-5 concrete key topic words or short phrases from the article content, separated by spaces or commas, so the title feels substantial rather than compressed.
+- Shape the keyword block like a compact headline, not a loose tag list.
+- Add a clickable news angle such as contrast, surprise, consequence, escalation, breakthrough, competition, or practical stakes when the material supports it.
+- Write the title in publication-ready plain text using words and punctuation that read naturally in Japanese news headlines.
 - Example: `4/10 | 最新AIニュース | GPT-5発表 Anthropic新モデル Cursor競争激化`
 
 ## Heading Style:
-- No emojis in any section headings (##, ###)
+- Write section headings in plain text so they read cleanly in Markdown and note-style publishing.
 """
 
 
@@ -173,12 +223,12 @@ Write Markdown in exactly this structure:
 - 2-3 sentences on what ties the day together and how to close naturally.
 
 ## Rules:
-- Use ONLY the raw data below. Never fabricate facts, links, or source names.
-- This dossier should be factual, clear, and planning-oriented. Do not perform the final stylish narration yet.
+- Ground every fact, link, and source name in the raw data below.
+- Keep this dossier factual, clear, and planning-oriented so the final stylish narration can happen in the next stage.
 - Facts should stay concise and grounded.
 - Comment angle should identify the startup/builder lens, but remain analytical rather than fully stylized.
 - If a claim looks like community opinion rather than established fact, make that clear.
-- Omit empty item slots rather than inventing weak topics.
+- Fill only the item slots supported by strong material from the source data.
 - Output language: Japanese.
 
 ## RAW DATA:
@@ -202,17 +252,18 @@ Turn the factual dossier below into the final published article.
 - Total target length: about 2,800-3,200 Japanese characters.
 - Structure must be:
   1. Title (follow the Title Format above exactly)
-  2. Intro
+  2. Opening paragraphs directly under the title
   3. Macro AI Trends
   4. Reddit's Lab
   5. AI Coding
-  6. Outro
+  6. まとめ
 
 ## Intro Requirements:
 - The intro must include this fixed opening in natural Japanese:
   「皆さんおはようございます。今日もAI回してますか、ということで、{spoken_date}の朝イチ、AIキャッチアップニュースのお時間です。」
 - Explicitly say this edition is based on Reddit discussions from the last 24 hours.
 - Let the intro reflect the actual mood or pattern of the selected topics, not just a fixed boilerplate.
+- Begin the article body immediately after the title with natural opening paragraphs instead of a `## Intro` heading.
 
 ## Body Requirements:
 - For each selected item, write:
@@ -221,17 +272,18 @@ Turn the factual dossier below into the final published article.
   - **[WKFLの感想]**: the human commentary
 - Keep [議論の概要] grounded and concise.
 - Keep [WKFLの感想] witty, fair-minded, and sharp without sounding superior.
-- Critique choices, tradeoffs, incentives, or execution. Do not mock people.
+- Keep critique focused on choices, tradeoffs, incentives, and execution while maintaining respect for the people involved.
 
-## Outro Requirements:
+## まとめ Requirements:
+- Add a final section heading as `## まとめ`.
 - Close naturally by tying together the day's themes.
 - It should feel like an ending to this specific edition, not a generic sign-off pasted onto any day.
 - The final line must end with:
   「それでは、また明日お会いしましょう。」
 
 ## Rules:
-- Use ONLY the dossier below.
-- Do not invent facts that are not in the dossier.
+- Build the article entirely from the dossier below.
+- Keep every fact anchored to the dossier.
 - Preserve the Reddit-specific framing.
 - Output language: Japanese.
 - Output format: Markdown.
@@ -308,9 +360,9 @@ Write Markdown in exactly this structure:
 - 2-3 sentences on what these selected topics say about the current AI landscape.
 
 ## Rules:
-- Use ONLY the source data below. Do not fabricate facts.
+- Ground every fact in the source data below.
 - Preserve input order.
-- This dossier should be factual, clear, and planning-oriented. Do not perform the final stylish narration yet.
+- Keep this dossier factual, clear, and planning-oriented so the final stylish narration can happen in the next stage.
 - If the source text is thin or uncertain, say so explicitly.
 - Source introduction should identify the media and publication date naturally.
 - Comment angle should identify the startup/builder lens, but remain analytical rather than fully stylized.
@@ -337,15 +389,16 @@ Turn the factual dossier below into the final published article.
 - Total target length: about 2,800-3,200 Japanese characters.
 - Structure must be:
   1. Title (follow the Title Format above exactly)
-  2. Intro
+  2. Opening paragraphs directly under the title
   3. Body with one section per selected article
-  4. Outro
+  4. まとめ
 
 ## Intro Requirements:
 - The intro must include this fixed opening in natural Japanese:
   「皆さんおはようございます。今日もAI回してますか、ということで、{spoken_date}の朝イチ、AIキャッチアップニュースのお時間です。」
 - Explicitly say that today WKFL is talking through 3 selected topics he is paying attention to right now.
 - Let the intro reflect what links the picks together, not just a fixed boilerplate.
+- Begin the article body immediately after the title with natural opening paragraphs instead of a `## Intro` heading.
 
 ## Body Requirements:
 - For each article, write:
@@ -358,15 +411,16 @@ Turn the factual dossier below into the final published article.
 - Keep [WKFLの感想] witty, fair-minded, and sharp without condescension.
 - Comment on implications, tradeoffs, market meaning, developer meaning, or long-term direction when the dossier supports it.
 
-## Outro Requirements:
+## まとめ Requirements:
+- Add a final section heading as `## まとめ`.
 - Close naturally by tying together what the 3 selected topics reveal about the current moment in AI.
 - It should feel specific to this set of picks.
 - The final line must end with:
   「それでは、また明日お会いしましょう。」
 
 ## Rules:
-- Use ONLY the dossier below.
-- Do not invent facts that are not in the dossier.
+- Build the article entirely from the dossier below.
+- Keep every fact anchored to the dossier.
 - Preserve the selected-articles framing.
 - Output language: Japanese.
 - Output format: Markdown.
@@ -431,9 +485,9 @@ Write Markdown in exactly this structure:
 - 2-3 sentences on how to close naturally, tying together what WKFL was getting at.
 
 ## Rules:
-- Use ONLY the raw notes below. Do not fabricate facts.
-- Organize and clarify the input, but do not invent new claims.
-- This dossier should be factual and planning-oriented. Do not perform the final stylish narration yet.
+- Ground every fact in the raw notes below.
+- Organize and clarify the input while staying faithful to the claims already present.
+- Keep this dossier factual and planning-oriented so the final stylish narration can happen in the next stage.
 - Output language: Japanese.
 
 ## RAW NOTES:
@@ -457,31 +511,33 @@ Turn the structured dossier below into a finished FreeTalk article.
 - Total target length: about 2,800-3,200 Japanese characters.
 - Structure:
   1. Title (follow the Title Format above exactly)
-  2. Intro
+  2. Opening paragraphs directly under the title
   3. One section per topic
-  4. Outro
+  4. まとめ
 
 ## Intro Requirements:
 - Open with: 「皆さんおはようございます。今日もAI回してますか、ということで、WKFLです。」
 - Then: 「今日はちょっと気になっていることを話してみたいんですが、」
 - Let the intro set up what the topics are about in a natural, conversational way.
+- Begin the article body immediately after the title with natural opening paragraphs instead of a `## Intro` heading.
 
 ## Body Requirements:
-- Each topic gets its own section with a plain Markdown heading (## [topic title], no emojis).
-- Write the factual part and the commentary as continuous flowing prose — do NOT use bold labels like **WKFL's Eye** or **感想** to break up the paragraphs.
-- The commentary and personal take should flow naturally out of the factual description, not be labeled separately.
+- Each topic gets its own section with a plain Markdown heading in words (## [topic title]).
+- Write the factual part and the commentary as continuous flowing prose, letting the section read like one natural piece rather than a labeled checklist.
+- Let the commentary and personal take flow naturally out of the factual description.
 - Keep the voice conversational, first-person, and grounded in WKFL's builder perspective.
-- The insight or "so what" should land at the end of each section as a natural conclusion, not a labeled callout.
+- Let the insight or "so what" land at the end of each section as a natural conclusion.
 
-## Outro Requirements:
+## まとめ Requirements:
+- Add a final section heading as `## まとめ`.
 - Tie together the topics naturally.
 - The final line must be: 「それでは、また明日お会いしましょう。」
 
 ## Rules:
-- Use ONLY the dossier below.
-- Do not invent facts not in the dossier.
-- No emojis anywhere.
-- No bold section labels for commentary (no **WKFL's Eye**, no **感想**, no **コメント**).
+- Build the article entirely from the dossier below.
+- Keep every fact anchored to the dossier.
+- Use words and prose styling throughout, keeping the page visually clean and publication-ready.
+- Express commentary as flowing paragraphs rather than bold labels such as **WKFL's Eye**, **感想**, or **コメント**.
 - Output language: Japanese.
 - Output format: Markdown.
 
@@ -501,7 +557,7 @@ Turn the completed article below into a podcast-ready narration script.
 
 ## Requirements:
 - Output language: Japanese.
-- Output plain text only. No Markdown, no headings, no bullets, no labels.
+- Render the script as plain spoken text, using sentences only.
 - The output must contain only words that should actually be spoken by the TTS.
 - This is a spoken script, not a blog article.
 - Preserve the same facts and same editorial intent as the article.
@@ -513,9 +569,7 @@ Turn the completed article below into a podcast-ready narration script.
 - Explain each news item in a way that sounds introduced by a host, not read aloud from a note post.
 - Keep reactions emotionally readable and voiceable, but do not add unsupported facts.
 - Small spoken hesitations or oral phrasing are fine, but do not overdo them.
-- Do not output any title line like "ポッドキャスト台本".
-- Do not output section headers like "オープニング" or "Topic 1".
-- Do not output separators like "---".
+- Keep the script continuous and ready to read aloud, without title lines, section headers, or visual separators.
 
 ## Structure:
 1. Opening
@@ -540,7 +594,7 @@ Turn the completed FreeTalk article below into a podcast-ready narration script.
 
 ## Requirements:
 - Output language: Japanese.
-- Output plain text only. No Markdown, no headings, no bullets, no labels.
+- Render the script as plain spoken text, using sentences only.
 - The output must contain only words that should actually be spoken by the TTS.
 - This is a spoken script, not a blog article.
 - Preserve the same facts and same editorial intent as the article.
@@ -550,8 +604,7 @@ Turn the completed FreeTalk article below into a podcast-ready narration script.
 - The script must end with:
   「それでは、また明日お会いしましょう。」
 - Keep the voice conversational and first-person throughout — this is WKFL thinking out loud, not reading a structured briefing.
-- Do not output any title line or section headers.
-- Do not output separators like "---".
+- Keep the script continuous and ready to read aloud, without title lines, section headers, or visual separators.
 
 ## ARTICLE:
 {article}
