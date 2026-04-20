@@ -29,7 +29,7 @@ def format_slash_date(dt: datetime) -> str:
     return f"{dt.month}/{dt.day}"
 
 
-def resolve_models(default_model: str, override_model: str | None = None) -> tuple[str, str]:
+def resolve_models(default_model: str, override_model: str = None) -> tuple[str, str]:
     base_model = override_model or os.environ.get("WKFL_MODEL", default_model)
     fact_model = os.environ.get("WKFL_FACT_MODEL", base_model)
     style_model = os.environ.get("WKFL_STYLE_MODEL", base_model)
@@ -47,7 +47,7 @@ def _read_api_key(env_name: str) -> str:
     return api_key
 
 
-def _read_usage_tokens(usage: object) -> tuple[int | None, int | None]:
+def _read_usage_tokens(usage: object) -> tuple:
     if usage is None:
         return None, None
     input_tokens = getattr(usage, "input_tokens", None)
@@ -117,19 +117,16 @@ def prepend_title_to_podcast(podcast_script: str, title: str) -> str:
 
 
 TITLE_FORMAT_INSTRUCTION = """
-## Title Format (CRITICAL):
-- The article title must follow this exact format:
-  `{slash_date} | 最新AIニュース | [keywords]`
-- Total length target: 46-54 Japanese characters, aiming to land close to 50.
-- The prefix `{slash_date} | 最新AIニュース | ` is already about 16 chars, so the keyword block should usually be about 30-38 Japanese characters.
-- Use 3-5 concrete key topic words or short phrases from the article content, separated by spaces or commas, so the title feels substantial rather than compressed.
-- Shape the keyword block like a compact headline, not a loose tag list.
-- Add a clickable news angle such as contrast, surprise, consequence, escalation, breakthrough, competition, or practical stakes when the material supports it.
-- Write the title in publication-ready plain text using words and punctuation that read naturally in Japanese news headlines.
-- Example: `4/10 | 最新AIニュース | GPT-5発表 Anthropic新モデル Cursor競争激化`
+## Title Format:
+- Write a single, highly engaging title of around 60 Japanese characters.
+- Move beyond simple news reporting to hint at a deep, insightful takeaway or a positive paradigm shift.
+- Maximize CTR by tapping into curiosity, excitement, and profound implications for builders. Let your "AI addict designer" perspective shine with positive, expansive framing.
+- Make it sound like a compelling, insightful YouTube or note.com title.
+- (Note: You are given {slash_date} as context, but do not include dates or generic prefixes in the title itself).
+- Example: `ついにLangChain卒業！？OpenAIの新機能がもたらすAIエージェント開発のパラダイムシフトと、UXデザインの未来`
 
 ## Heading Style:
-- Write section headings in plain text so they read cleanly in Markdown and note-style publishing.
+- Write section headings in plain text so they read cleanly in Markdown.
 """
 
 
@@ -248,43 +245,35 @@ REDDIT_ARTICLE_PROMPT_TEMPLATE = """
 Turn the factual dossier below into the final published article.
 
 ## Article Shape:
-- This is a complete article, not notes.
+- This is a complete article formatted as a seamless spoken monologue.
 - Total target length: about 2,800-3,200 Japanese characters.
 - Structure must be:
   1. Title (follow the Title Format above exactly)
-  2. Opening paragraphs directly under the title
-  3. Macro AI Trends
-  4. Reddit's Lab
-  5. AI Coding
-  6. まとめ
+  2. Spoken Intro
+  3. Seamless transitions into the topics (using a Markdown heading for each topic)
+  4. Natural conversational closing
 
 ## Intro Requirements:
-- The intro must include this fixed opening in natural Japanese:
-  「皆さんおはようございます。今日もAI回してますか、ということで、{spoken_date}の朝イチ、AIキャッチアップニュースのお時間です。」
-- Explicitly say this edition is based on Reddit discussions from the last 24 hours.
-- Let the intro reflect the actual mood or pattern of the selected topics, not just a fixed boilerplate.
-- Begin the article body immediately after the title with natural opening paragraphs instead of a `## Intro` heading.
+- Anchor your opening with the core catchphrase: 「皆さんおはようございます。今日もAI、回してますか？」(You can tweak it to match your mood).
+- Follow it with a freestyle, conversational intro that sets the mood for the day's Reddit news. Dive straight into talking right after the title.
+- Mention that we're looking at Reddit's 24-hour discussions, but say it naturally like a podcast host.
 
 ## Body Requirements:
-- For each selected item, write:
-  - ### ■ [Title] (Source: [source with link])
-  - **[議論の概要]**: factual and readable
-  - **[WKFLの感想]**: the human commentary
-- Keep [議論の概要] grounded and concise.
-- Keep [WKFLの感想] witty, fair-minded, and sharp without sounding superior.
-- Keep critique focused on choices, tradeoffs, incentives, and execution while maintaining respect for the people involved.
+- For each selected item, start with a simple topic heading: `### ■ [Title] (Source: [source with link])`
+- Immediately below the heading, start speaking.
+- Naturally explain the facts of the topic in spoken Japanese, as if you are explaining it clearly to a friend.
+- Smoothly transition into your personal commentary, using conversational pivots like 「ということで、ついに来ましたね、新モデル！」 or 「いやー、これね、」 or 「まあ、アレですよ」.
+- Write it as flowing, continuous paragraphs without any clunky subheadings.
+- Keep the commentary witty, fair-minded, and sharp. Speak passionately from the perspective of an AI automation addict and designer.
 
-## まとめ Requirements:
-- Add a final section heading as `## まとめ`.
-- Close naturally by tying together the day's themes.
-- It should feel like an ending to this specific edition, not a generic sign-off pasted onto any day.
-- The final line must end with:
-  「それでは、また明日お会いしましょう。」
+## Outro Requirements:
+- When you finish the last topic, transition into a natural closing thought that ties the day together.
+- The very last line must be: 「それでは、また明日お会いしましょう。」
 
 ## Rules:
 - Build the article entirely from the dossier below.
 - Keep every fact anchored to the dossier.
-- Preserve the Reddit-specific framing.
+- Use your persona (first-person "僕", spoken tone, occasional fillers).
 - Output language: Japanese.
 - Output format: Markdown.
 
@@ -385,43 +374,36 @@ SELECTED_ARTICLE_PROMPT_TEMPLATE = """
 Turn the factual dossier below into the final published article.
 
 ## Article Shape:
-- This is a complete article, not notes.
+- This is a complete article formatted as a seamless spoken monologue.
 - Total target length: about 2,800-3,200 Japanese characters.
 - Structure must be:
   1. Title (follow the Title Format above exactly)
-  2. Opening paragraphs directly under the title
-  3. Body with one section per selected article
-  4. まとめ
+  2. Spoken Intro
+  3. Seamless transitions into each selected article (using a Markdown heading)
+  4. Natural conversational closing
 
 ## Intro Requirements:
-- The intro must include this fixed opening in natural Japanese:
-  「皆さんおはようございます。今日もAI回してますか、ということで、{spoken_date}の朝イチ、AIキャッチアップニュースのお時間です。」
-- Explicitly say that today WKFL is talking through 3 selected topics he is paying attention to right now.
-- Let the intro reflect what links the picks together, not just a fixed boilerplate.
-- Begin the article body immediately after the title with natural opening paragraphs instead of a `## Intro` heading.
+- Anchor your opening with the core catchphrase: 「皆さんおはようございます。今日もAI、回してますか？」(You can tweak it naturally).
+- Follow it with a freestyle, conversational intro stating that today you picked specific topics you're paying attention to. Let the intro reflect what links them together.
 
 ## Body Requirements:
-- For each article, write:
-  - ### ■ [Title]
-  - **[ソース紹介]**
-  - **[概要]**
-  - **[WKFLの感想]**
-  - Source: [記事タイトル](URL)
-- Keep [概要] factual and readable.
-- Keep [WKFLの感想] witty, fair-minded, and sharp without condescension.
-- Comment on implications, tradeoffs, market meaning, developer meaning, or long-term direction when the dossier supports it.
+- For each article, start with a simple topic heading: 
+  - `### ■ [Title]`
+  - `Source: [記事タイトル](URL)`
+- Then immediately start speaking.
+- Briefly and naturally explain the source and the facts in spoken Japanese.
+- Smoothly transition into your personal commentary using natural conversational pivots.
+- Write it as flowing, continuous paragraphs without any clunky subheadings.
+- Provide observations from your "AI addict designer" perspective.
 
-## まとめ Requirements:
-- Add a final section heading as `## まとめ`.
-- Close naturally by tying together what the 3 selected topics reveal about the current moment in AI.
-- It should feel specific to this set of picks.
-- The final line must end with:
-  「それでは、また明日お会いしましょう。」
+## Outro Requirements:
+- When you finish the last topic, transition into a natural closing thought.
+- The very last line must be: 「それでは、また明日お会いしましょう。」
 
 ## Rules:
 - Build the article entirely from the dossier below.
 - Keep every fact anchored to the dossier.
-- Preserve the selected-articles framing.
+- Use your persona (first-person "僕", spoken tone, occasional fillers).
 - Output language: Japanese.
 - Output format: Markdown.
 
@@ -507,37 +489,33 @@ FREETALK_ARTICLE_PROMPT_TEMPLATE = """
 Turn the structured dossier below into a finished FreeTalk article.
 
 ## Article Shape:
-- This is a complete article, not notes.
+- This is a complete article formatted as a seamless spoken monologue.
 - Total target length: about 2,800-3,200 Japanese characters.
 - Structure:
   1. Title (follow the Title Format above exactly)
-  2. Opening paragraphs directly under the title
-  3. One section per topic
-  4. まとめ
+  2. Spoken Intro
+  3. Seamless transitions into each topic (using a Markdown heading)
+  4. Natural conversational closing
 
 ## Intro Requirements:
-- Open with: 「皆さんおはようございます。今日もAI回してますか、ということで、WKFLです。」
-- Then: 「今日はちょっと気になっていることを話してみたいんですが、」
-- Let the intro set up what the topics are about in a natural, conversational way.
-- Begin the article body immediately after the title with natural opening paragraphs instead of a `## Intro` heading.
+- Anchor your opening with the core catchphrase: 「皆さんおはようございます。今日もAI、回してますか？」(You can tweak it naturally).
+- Follow it with a freestyle intro: 「今日はちょっと気になっていることを話してみたいんですが、」 and naturally introduce the themes.
 
 ## Body Requirements:
-- Each topic gets its own section with a plain Markdown heading in words (## [topic title]).
-- Write the factual part and the commentary as continuous flowing prose, letting the section read like one natural piece rather than a labeled checklist.
-- Let the commentary and personal take flow naturally out of the factual description.
-- Keep the voice conversational, first-person, and grounded in WKFL's builder perspective.
-- Let the insight or "so what" land at the end of each section as a natural conclusion.
+- Each topic gets its own section with a plain Markdown heading `### [topic title]`.
+- Immediately below, write as a continuous flowing monologue. Use "僕" throughout.
+- Speak freely about the facts and your insights. Blend them together naturally.
+- Let your passion, curiosity, and minor self-deprecating humor shine.
+- Integrate the commentary organically into the flow of speech without any clunky subheadings.
 
-## まとめ Requirements:
-- Add a final section heading as `## まとめ`.
+## Outro Requirements:
 - Tie together the topics naturally.
 - The final line must be: 「それでは、また明日お会いしましょう。」
 
 ## Rules:
 - Build the article entirely from the dossier below.
 - Keep every fact anchored to the dossier.
-- Use words and prose styling throughout, keeping the page visually clean and publication-ready.
-- Express commentary as flowing paragraphs rather than bold labels such as **WKFL's Eye**, **感想**, or **コメント**.
+- Use your persona (first-person "僕", spoken tone, occasional fillers).
 - Output language: Japanese.
 - Output format: Markdown.
 
@@ -557,26 +535,12 @@ Turn the completed article below into a podcast-ready narration script.
 
 ## Requirements:
 - Output language: Japanese.
-- Render the script as plain spoken text, using sentences only.
-- The output must contain only words that should actually be spoken by the TTS.
-- This is a spoken script, not a blog article.
-- Preserve the same facts and same editorial intent as the article.
-- Rewrite into smoother, more human spoken language.
-- The script must open with:
-  「皆さんおはようございます。今日もAI回してますか、ということで、{spoken_date}の朝イチ、AIキャッチアップニュースのお時間です。」
-- The script must end with:
-  「それでは、また明日お会いしましょう。」
-- Explain each news item in a way that sounds introduced by a host, not read aloud from a note post.
-- Keep reactions emotionally readable and voiceable, but do not add unsupported facts.
-- Small spoken hesitations or oral phrasing are fine, but do not overdo them.
+- The provided article is already written in a spoken, conversational tone.
+- Your job is to format it as plain spoken text, removing any Markdown headings, bullet points, URLs, BGM instructions, or any non-spoken text within parentheses.
+- The output must contain only the exact words that should be read aloud by the TTS.
+- Preserve the same facts and editorial flow as the article.
+- Do NOT add a rigid boilerplate opening if the article already has a natural one. Just ensure the core opening and closing ("それでは、また明日お会いしましょう。") are maintained.
 - Keep the script continuous and ready to read aloud, without title lines, section headers, or visual separators.
-
-## Structure:
-1. Opening
-2. Topic 1
-3. Topic 2
-4. Topic 3
-5. Closing
 
 ## ARTICLE:
 {article}
@@ -594,16 +558,11 @@ Turn the completed FreeTalk article below into a podcast-ready narration script.
 
 ## Requirements:
 - Output language: Japanese.
-- Render the script as plain spoken text, using sentences only.
-- The output must contain only words that should actually be spoken by the TTS.
-- This is a spoken script, not a blog article.
-- Preserve the same facts and same editorial intent as the article.
-- Rewrite into smoother, more human spoken language.
-- The script must open with:
-  「皆さんおはようございます。今日もAI回してますか、ということで、WKFLです。今日はちょっと気になっていることを話してみたいんですが、」
-- The script must end with:
-  「それでは、また明日お会いしましょう。」
-- Keep the voice conversational and first-person throughout — this is WKFL thinking out loud, not reading a structured briefing.
+- The provided article is already written in a spoken, conversational tone.
+- Your job is to format it as plain spoken text, removing any Markdown headings, bullet points, URLs, BGM instructions, or any non-spoken text within parentheses.
+- The output must contain only the exact words that should be read aloud by the TTS.
+- Preserve the same facts and editorial flow as the article.
+- Do NOT add a rigid boilerplate opening if the article already has a natural one. Just ensure the core opening and closing ("それでは、また明日お会いしましょう。") are maintained.
 - Keep the script continuous and ready to read aloud, without title lines, section headers, or visual separators.
 
 ## ARTICLE:
