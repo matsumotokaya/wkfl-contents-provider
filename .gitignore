@@ -7,3 +7,5 @@ articles/
 note/
 X/data/raw_feeds/
 Brain/
+.venv/
+node_modules/

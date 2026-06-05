@@ -72,6 +72,8 @@ def fetch_feeds():
             print(f"  -> Found {count} items in {feed['name']}")
         except Exception as e:
             print(f"  -> ERROR fetching {feed['name']}: {e}")
+            
+        time.sleep(2)  # アクセス過多によるブロックを回避するための待機
 
     # 重複排除
     unique_entries = {e['link']: e for e in all_entries}.values()

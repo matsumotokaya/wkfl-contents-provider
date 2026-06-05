@@ -1,6 +1,18 @@
 # WKFL 自律型AIメディアエンジン
 
-**最終更新: 2026-04-10**
+**最終更新: 2026-06-05**
+
+---
+
+## アカウント・配信先（基本情報）
+
+| 媒体 | アカウント / URL |
+|---|---|
+| 番組名 | WKFLのAI TODAY |
+| note | https://note.com/wkflstudio |
+| X | https://x.com/wkflstudio |
+| YouTube | https://www.youtube.com/@WKFL-m3p |
+| Spotify | https://open.spotify.com/show/3ExVQrRg3eXrmAm6ajW3eq |
 
 ---
 
@@ -27,6 +39,29 @@ WKFLが気になった特定のニュースURL（3本前後）を読み込ませ
    python3 X/scripts/synthesize_articles.py "URL1" "URL2" "URL3"
    ```
 
+### ルートC: フリートーク (FreeTalk)
+WKFLが語りたいテーマや考察を口頭・テキストで投げ、それをそのまま記事に仕立てる「持ち込み企画」ルート。外部記事もURLも不要。WKFLの頭の中にあるものが素材になる。
+
+**現行シリーズ: AI業界用語ピックアップ**
+今旬のAI業界キーワードを1回1ワード取り上げ、WKFLの視点で解説・考察していく連続企画。
+
+| 回 | キーワード |
+|---|---|
+| #1 | コンテキストグラフ |
+
+1. **メイン：チャット上での対話生成**
+   - テーマ・考え方・考察をこのチャットに投げ、エージェント（私）がWKFLペルソナで記事に仕立てる
+   - 対話で肉付けしながら進めるのが基本スタイル
+2. **補助：CLIでの一括処理**
+   - メモをテキストファイルにまとめてある場合は以下を使用する
+   ```bash
+   python3 X/scripts/synthesize_freetalk.py myideas.txt
+   ```
+   - stdinで直打ちする場合（Ctrl+Dで終了）
+   ```bash
+   python3 X/scripts/synthesize_freetalk.py
+   ```
+
 ---
 
 ## 何をするシステムか
@@ -39,13 +74,17 @@ AIポッドキャストパーソナリティ「WKFL」のスタイルで、3つ�
 
 ---
 
-## 現在の状態（2026-04-04時点）
+## 現在の状態（2026-06-05時点）
 
 | ステップ | 状態 | 備考 |
 |---|---|---|
 | RSS収集 (`ingest_rss.py`) | ✅ 動作中 | 4サブレディット、24時間フィルタ |
-| 記事生成 (`synthesize_note.py`) | ✅ 動作中 | **OpenAI API接続済み**（デフォルトは `gpt-5.4`） |
+| 記事生成 (`synthesize_note.py`) | ✅ 動作中 | デフォルトは `gpt-5.4` |
 | 全体実行 (`run_all.py`) | ✅ 動作中 | 上記2ステップを順に実行 |
+| スポット記事 (`synthesize_articles.py`) | ✅ 動作中 | 任意URL複数指定 |
+| FreeTalk回 (`synthesize_freetalk.py`) | ✅ 動作中 | |
+| GitHub Actions 自動実行 | ✅ 設定済み | 毎日22:00 UTC = 07:00 JST |
+| 動画制作（Remotion） | ✅ 稼働中 | `articles/` の音声+JSONを素材にMP4生成。手順は [video/README.md](video/README.md) |
 | 記事投稿（note等） | 🔲 手動 | `articles/` に保存したMDを配信先へ投稿 |
 | X投稿 | 🔲 未実装 | 将来フェーズ |
 | Web UI | ⏸ 中断中 | Render上のAPI問題と合わせて保留中 |
@@ -77,8 +116,9 @@ AIポッドキャストパーソナリティ「WKFL」のスタイルで、3つ�
 
 | パイプライン | 素材 | 出力ファイル名 |
 |---|---|---|
-| **スクレイピング・プラン** | 直近24時間のReddit議論を自動収集 | `articles/{date}/reddit.md` |
-| **ピックアップ・ニュース** | WKFLが指定した外部記事URL（3本程度） | `articles/{date}/articles.md` |
+| **スクレイピング・プラン**（ルートA） | 直近24時間のReddit議論を自動収集 | `articles/{date}/reddit.md` |
+| **ピックアップ・ニュース**（ルートB） | WKFLが指定した外部記事URL（3本程度） | `articles/{date}/articles.md` |
+| **フリートーク**（ルートC） | WKFLが語るテーマ・考察・雑談 | `articles/{date}/freetalk.md` |
 
 どのルートも最終的には「完成記事 + podcast台本 + dossier」の3点セットを出力し、`articles/{date}/` に集約される。
 
@@ -185,6 +225,30 @@ AIポッドキャストパーソナリティ「WKFL」のスタイルで、3つ�
 
 ---
 
+## 動画制作（Remotion）
+
+**動画は任意の最終工程。** WKFLの成果物は「記事だけ」「記事＋Podcast」「記事＋Podcast＋動画」のいずれもありうる。必ず動画まで作るわけではなく、セットで配信するプランのときに動画化する。
+
+動画化するときは `articles/{date}/` の音声＋タイムスタンプJSONを素材に、`video/`（Remotionプロジェクト）でニュース配信番組風のMP4を生成する。完成動画は YouTube（[@WKFL-m3p](https://www.youtube.com/@WKFL-m3p)）等へアップロードする。
+
+### 最短手順
+
+```bash
+# 1) articles/{date}/ に素材を置く（音声wav / タイムスタンプjson / meta.json / assets/topicN.*）
+# 2) 素材を video/public/ へ取り込む
+cd video && node prepare.mjs 2026-06-05
+# 3) プレビュー
+npx remotion studio --port 3001
+# 4) 書き出し（720p。1080pなら --scale を省略）
+npx remotion render WKFL out/WKFL.mp4 --scale=0.6667
+```
+
+**詳細・再現手順・素材規約・コンポーネント構成は [video/README.md](video/README.md) が正本。**
+
+> 補足: 実際のTTSアプリが出力するJSONは、トピックごとに1つの大きい `normal` セグメント（複数文を含む）。字幕は `video/src/captions.ts` が各セグメントを文単位に分割し、文字数比で時間配分して生成する。
+
+---
+
 ## ディレクトリ構成
 
 ```
@@ -196,15 +260,18 @@ WKFL/
 ├── requirements.txt       ← Python依存パッケージ
 ├── articles/              ← 日付ディレクトリごとにバンドル一式を集約（唯一の出力先）
 │   └── YYYY-MM-DD/
-│       ├── reddit.md           ← Reddit回 記事
-│       ├── reddit_podcast.md   ← Reddit回 podcast台本
-│       ├── reddit_dossier.md   ← Reddit回 dossier
-│       ├── articles.md         ← セレクト記事回 記事
-│       ├── articles_podcast.md
-│       ├── articles_dossier.md
-│       ├── freetalk.md         ← FreeTalk回 記事
+│       ├── reddit.md             ← Reddit回 記事
+│       ├── reddit_podcast.md     ← Reddit回 podcast台本
+│       ├── reddit_dossier.md     ← Reddit回 dossier
+│       ├── articles.md           ← セレクト記事回 記事
+│       ├── articles_podcast.md   ← セレクト記事回 podcast台本
+│       ├── articles_dossier.md   ← セレクト記事回 dossier
+│       ├── freetalk.md           ← FreeTalk回 記事
 │       ├── freetalk_podcast.md
-│       └── freetalk_dossier.md
+│       ├── freetalk_dossier.md
+│       ├── episode.mp3           ← Google AI Studio TTSで生成した音声（手動配置）
+│       └── episode.json          ← TTSアプリが出力するタイムスタンプJSON（手動配置）
+├── video/                 ← Remotionプロジェクト（動画制作。手順は video/README.md）
 ├── podcast/               ← podcast台本のプライマリ出力先
 │   └── scripts/
 └── X/
@@ -396,7 +463,7 @@ python3 X/scripts/synthesize_articles.py \
 
 ### WKFLのパーソナリティ
 
-- **名前**: WKFL（ウォッチフル）
+- **名前**: WKFL
 - **立ち位置**: AIプロダクトを実際に作っている、スタートアップの企業家・開発者
 - **スタイル**: 軽妙で観察眼は鋭いが、企業・研究者・開発者への敬意を失わないポッドキャストパーソナリティ
 - **解説**: 客観的に300文字程度でニュース事実を伝える

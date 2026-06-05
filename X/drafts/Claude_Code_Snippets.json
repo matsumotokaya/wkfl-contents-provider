@@ -1,0 +1,20 @@
+[
+  {
+    "id": "snippet_001",
+    "content": "Claude Code is a CLI tool from Anthropic that lives in your terminal. 🛠️\n\nNo more context-switching or copy-pasting code back and forth to a chat window. It reads your files, runs commands, and debugs with context.\n\nThe future of coding is here. #ClaudeCode #AI #SoftwareEngineering",
+    "status": "draft",
+    "scheduled_time": "2026-04-04 10:00:00"
+  },
+  {
+    "id": "snippet_002",
+    "content": "🔥 Tip for Claude Code:\n\nUse `claude run \"Add a unit test for this function\"` and it will literally create the test file AND run it to verify.\n\nAutomated coding with a direct feedback loop. Simply magic. ✨ #Anthropic #Claude #DeveloperExperience",
+    "status": "draft",
+    "scheduled_time": "2026-04-05 10:00:00"
+  },
+  {
+    "id": "snippet_003",
+    "content": "Ever wonder why context switching is the #1 productivity killer? 📉\n\nClaude Code fixes this by being an AI assistant that lives directly in your shell. It's safe-by-design, using a permission-based system for critical commands.\n\nSafe. Fast. Integrated. 🚀 #Productivity #Python #CLI",
+    "status": "draft",
+    "scheduled_time": "2026-04-06 10:00:00"
+  }
+]

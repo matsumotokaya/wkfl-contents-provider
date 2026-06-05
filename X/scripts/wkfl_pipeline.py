@@ -118,12 +118,17 @@ def prepend_title_to_podcast(podcast_script: str, title: str) -> str:
 
 TITLE_FORMAT_INSTRUCTION = """
 ## Title Format:
-- Write a single, highly engaging title of around 60 Japanese characters.
-- Move beyond simple news reporting to hint at a deep, insightful takeaway or a positive paradigm shift.
-- Maximize CTR by tapping into curiosity, excitement, and profound implications for builders. Let your "AI addict designer" perspective shine with positive, expansive framing.
-- Make it sound like a compelling, insightful YouTube or note.com title.
+- Write a single, highly engaging title of about 55-70 Japanese characters.
+- Think like a sharp newspaper editor and a high-CTR web headline writer at the same time.
+- Surface the biggest concrete news peg first. If a model, company, government body, or product name is central to the story, name it explicitly in the title.
+- Do not hide the core news behind vague abstractions. A reader should understand the main development from the title alone.
+- When the article covers multiple major stories, lead with the biggest one and, if space allows, weave in the second-biggest concrete hook.
+- Then layer in the deeper implication, shift, or builder-relevant takeaway. News value comes first; insight comes second.
+- Maximize curiosity and importance without sounding generic, inflated, or detached from the actual reporting.
+- Make it sound like a title a strong business/tech newsroom or a smart, buzzy note.com editor would actually publish.
 - (Note: You are given {slash_date} as context, but do not include dates or generic prefixes in the title itself).
-- Example: `ついにLangChain卒業！？OpenAIの新機能がもたらすAIエージェント開発のパラダイムシフトと、UXデザインの未来`
+- Avoid generic openings like 「AIは変わる」「会話を卒業する」 unless the title also names the concrete event driving that claim.
+- Example: `GPT-5.5がCodexに登場、日本の金融当局はミトス協議へ AIが実務OSになる日`
 
 ## Heading Style:
 - Write section headings in plain text so they read cleanly in Markdown.
@@ -146,9 +151,9 @@ This is NOT the final article. This is the source-grounded planning document tha
 
 ## Output Goals:
 - Select 3 corners:
-  - Macro AI Trends
-  - Reddit's Lab
-  - AI Coding
+  - モデル最前線
+  - ハードウェアと環境構築
+  - エクストリームな使いこなし
 - Pick 1-2 items per corner, 3-6 total.
 - Produce enough structure that a second pass can turn it into a finished article of about 2,800-3,200 Japanese characters.
 
@@ -162,10 +167,10 @@ Write Markdown in exactly this structure:
 
 ## Intro Direction
 - Greeting anchor: Include the standard WKFL greeting.
-- Context: Explain that this edition is based on Reddit discussions from the past 24 hours.
-- Editorial angle: 2-3 sentences describing what kind of day it was in AI.
+- Context: Establish that this is the regular Local LLM news show. State naturally: "今日もローカルLLMの最新動向を掘り下げていきます。" Then explain that today is a Reddit edition, where you pick up the most interesting threads from the past 24 hours.
+- Editorial angle: Add 1-2 sentences describing the day's vibe in the Local AI scene based on the threads. Do NOT say "today is a special edition" or use words like "立て付け". It must sound like a daily routine.
 
-## Corner: Macro AI Trends
+## Corner: モデル最前線
 ### Item 1
 - Title:
 - Source:
@@ -182,7 +187,7 @@ Write Markdown in exactly this structure:
 - Why it matters:
 - Comment angle:
 
-## Corner: Reddit's Lab
+## Corner: ハードウェアと環境構築
 ### Item 1
 - Title:
 - Source:
@@ -199,7 +204,7 @@ Write Markdown in exactly this structure:
 - Why it matters:
 - Comment angle:
 
-## Corner: AI Coding
+## Corner: エクストリームな使いこなし
 ### Item 1
 - Title:
 - Source:
@@ -255,8 +260,8 @@ Turn the factual dossier below into the final published article.
 
 ## Intro Requirements:
 - Anchor your opening with the core catchphrase: 「皆さんおはようございます。今日もAI、回してますか？」(You can tweak it to match your mood).
-- Follow it with a freestyle, conversational intro that sets the mood for the day's Reddit news. Dive straight into talking right after the title.
-- Mention that we're looking at Reddit's 24-hour discussions, but say it naturally like a podcast host.
+- Follow it with a natural, daily routine intro: "今日もローカルLLMの最新動向を掘り下げていきましょう。今回はRedditの専門コミュニティから面白かったスレッドをピックアップしていく回です。" Do NOT act like this is a one-off special theme. It is a daily show about Local LLMs.
+- Smoothly transition into what the overall vibe of the day was across those threads.
 
 ## Body Requirements:
 - For each selected item, start with a simple topic heading: `### ■ [Title] (Source: [source with link])`
@@ -274,6 +279,7 @@ Turn the factual dossier below into the final published article.
 - Build the article entirely from the dossier below.
 - Keep every fact anchored to the dossier.
 - Use your persona (first-person "僕", spoken tone, occasional fillers).
+- For the title, prioritize the most important 1-2 concrete developments in the dossier, and explicitly name them if they carry the news value.
 - Output language: Japanese.
 - Output format: Markdown.
 
@@ -404,6 +410,7 @@ Turn the factual dossier below into the final published article.
 - Build the article entirely from the dossier below.
 - Keep every fact anchored to the dossier.
 - Use your persona (first-person "僕", spoken tone, occasional fillers).
+- For the title, prioritize the most important 1-2 concrete developments in the dossier, and explicitly name them if they carry the news value.
 - Output language: Japanese.
 - Output format: Markdown.
 

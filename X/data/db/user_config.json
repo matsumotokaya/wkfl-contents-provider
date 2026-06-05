@@ -6,9 +6,14 @@
     "output_language": "ja"
   },
   "sources": [
-    { "name": "Reddit: r/ArtificialInteligence", "url": "https://www.reddit.com/r/ArtificialInteligence/new/.rss", "active": true },
-    { "name": "Reddit: r/MachineLearning", "url": "https://www.reddit.com/r/MachineLearning/new/.rss", "active": true },
-    { "name": "Reddit: r/OpenAI", "url": "https://www.reddit.com/r/OpenAI/new/.rss", "active": true },
-    { "name": "Reddit: r/LocalLLaMA", "url": "https://www.reddit.com/r/LocalLLaMA/new/.rss", "active": true }
+    { "name": "Reddit: r/LocalLLM", "url": "https://www.reddit.com/r/LocalLLM/top/.rss?t=day&limit=10", "active": true },
+    { "name": "Reddit: r/LocalLLaMA", "url": "https://www.reddit.com/r/LocalLLaMA/top/.rss?t=day&limit=10", "active": true },
+    { "name": "Reddit: r/Ollama", "url": "https://www.reddit.com/r/Ollama/top/.rss?t=day&limit=10", "active": true },
+    { "name": "Reddit: r/LocalAI", "url": "https://www.reddit.com/r/LocalAI/top/.rss?t=day&limit=10", "active": true },
+    { "name": "Reddit: r/StableDiffusion", "url": "https://www.reddit.com/r/StableDiffusion/top/.rss?t=day&limit=10", "active": true },
+    { "name": "Reddit: r/AIModels", "url": "https://www.reddit.com/r/AIModels/top/.rss?t=day&limit=10", "active": true },
+    { "name": "Reddit: r/ArtificialInteligence", "url": "https://www.reddit.com/r/ArtificialInteligence/top/.rss?t=day&limit=10", "active": true },
+    { "name": "Reddit: r/ObsidianMD", "url": "https://www.reddit.com/r/ObsidianMD/top/.rss?t=day&limit=10", "active": true },
+    { "name": "Reddit: r/selfhosted", "url": "https://www.reddit.com/r/selfhosted/top/.rss?t=day&limit=10", "active": true }
   ]
 }
