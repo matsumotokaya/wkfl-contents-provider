@@ -1,6 +1,6 @@
 # WKFL 自律型AIメディアエンジン
 
-**最終更新: 2026-06-05**
+**最終更新: 2026-06-09**
 
 ---
 
@@ -16,10 +16,88 @@
 
 ---
 
-## 記事生成のルート（実行方法）
+## 全体フロー
+
+```
+【第1段階：情報収集・調査フェーズ】
+ニュース取得 (RSS / HTMLスクレイピング / Reddit)
+  ├─ ジェネラル版 (AI全般) → news_feed.md
+  └─ テーマ特化版 (ローカルLLM, TTS等) → news_feed_{theme}.md
+
+        ↓
+
+【第2段階：記事生成フェーズ】
+キュレーションしたニュースを記事化
+  ├─ ルートA: スクレイピング・プラン（Reddit自動収集）
+  ├─ ルートB: ピックアップ・ニュース（URLベース）
+  └─ ルートC: フリートーク（考察テーマベース）
+```
+
+---
+
+## ニュース取得・調査フェーズ（第1段階）
+
+テーマ別の最新ニュースを自動収集し、AIサマリー付きのキュレーション用フィードを生成します。
+
+### 基本コマンド
+
+```bash
+# ジェネラル版（AI全般）
+python3 X/scripts/list_today_news.py
+
+# テーマ特化版（例：ローカルLLM）
+python3 X/scripts/list_today_news.py --theme localllm
+```
+
+### 実行結果
+
+出力ファイル: `articles/YYYY-MM-DD/news_feed.md` または `news_feed_{theme}.md`
+
+**ファイルの内容**:
+1. **記事一覧**: 日付・タイトル・説明付きで表示
+2. **AIによる要約**: 重複テーマを統合し、業界への影響を分析（自動生成）
+
+### 利用可能なテーマ
+
+- `localllm` — ローカルLLM関連の深掘り情報
+- その他のテーマはカスタマイズ可能（`X/data/db/user_config.json` で設定）
+
+### テーマのカスタマイズ
+
+新しいテーマを追加する場合（例：TTS関連のニュース）は、`X/data/db/user_config.json` に以下を追加：
+
+```json
+"themes": {
+  "tts": {
+    "name": "Text-to-Speech Specialist",
+    "google_news_keywords": [
+      "Text-to-Speech", "TTS", "音声合成", "音声生成", "ボイスクローニング"
+    ],
+    "google_news_limit": 20,
+    "google_news_time_filter_hours": 168,
+    "sources": []
+  }
+}
+```
+
+その後、`python3 X/scripts/list_today_news.py --theme tts` を実行。
+
+> [!NOTE]
+> **設定の正本（SSOT）について**
+> - `google_news_keywords` に列挙した語は、そのまま各地域のGoogle Newsへの検索クエリとして発行され、取得後の絞り込みフィルタにも使われる。**検索範囲はこの配列が唯一の正本**（コード側にキーワードのハードコードは無い）。
+> - `google_news_limit` / `google_news_time_filter_hours` を省略した場合の既定値は `X/scripts/ingest_rss.py` の定数で一元管理。
+> - 対象地域リストは同ファイルの `GOOGLE_NEWS_REGIONS` 定数が正本。現在は英語圏・日本語圏のエディションに限定（最大9エディションまで拡張可能で、追加分は定数直下にコメントで控えてある）。地域を増減すればログ表示にも自動反映される。
+
+---
+
+## 記事生成のルート（第2段階：実行方法）
+
+> **前提**: 第1段階でニュースフィード（`news_feed.md` または `news_feed_{theme}.md`）を取得済みの状態。  
+> ニュース取得がまだの場合は、上の「ニュース取得・調査フェーズ」セクションから開始してください。
 
 ### ルートA: スクレイピング・プラン (Scraping Plan)
-Redditから最新の議論を自動抽出し、API経由で一気にドラフトを生成する「定点観測」ルート。
+Redditから最新の議論を自動抽出し、API経由で一気にドラフトを生成する「定点観測」ルート。  
+**第1段階**: RSS収集 → **第2段階**: 記事生成
 
 ```bash
 cd /Users/kaya.matsumoto/projects/WKFL
@@ -74,15 +152,32 @@ AIポッドキャストパーソナリティ「WKFL」のスタイルで、3つ�
 
 ---
 
-## 現在の状態（2026-06-05時点）
+## 現在の状態（2026-06-09時点）
+
+### 第1段階：ニュース取得・調査フェーズ
 
 | ステップ | 状態 | 備考 |
 |---|---|---|
-| RSS収集 (`ingest_rss.py`) | ✅ 動作中 | 4サブレディット、24時間フィルタ |
+| RSS収集 (`ingest_rss.py`) | ✅ 動作中 | テーマ別・キーワードフィルター対応。Google News統合処理実装済み |
+| ニュースフィード生成 (`list_today_news.py`) | ✅ 動作中 | ジェネラル版・テーマ特化版両対応 |
+| テーマプロファイルシステム | ✅ 実装済み | `general`, `localllm` 稼働中 |
+| **ローカルLLM テーマ（新）** | ✅ 稼働中 | Google News（英語圏・日本語圏）をテーマ定義のキーワードで横断検索。検索語・件数・収集期間の正本は `user_config.json` のテーマ設定 |
+| **Google News 統合処理（新）** | ✅ 実装済み | 複数地域・複数キーワードの検索結果を統合。重複除去＋時系列ソート＋件数制限 |
+| テーマ別0件表示 | ✅ 実装済み | マッチなしメディアも表示 |
+
+### 第2段階：記事生成フェーズ
+
+| ステップ | 状態 | 備考 |
+|---|---|---|
 | 記事生成 (`synthesize_note.py`) | ✅ 動作中 | デフォルトは `gpt-5.4` |
-| 全体実行 (`run_all.py`) | ✅ 動作中 | 上記2ステップを順に実行 |
+| 全体実行 (`run_all.py`) | ✅ 動作中 | RSS収集 → 記事生成を順実行 |
 | スポット記事 (`synthesize_articles.py`) | ✅ 動作中 | 任意URL複数指定 |
-| FreeTalk回 (`synthesize_freetalk.py`) | ✅ 動作中 | |
+| FreeTalk回 (`synthesize_freetalk.py`) | ✅ 動作中 | 考察テーマベース |
+
+### その他のフェーズ
+
+| ステップ | 状態 | 備考 |
+|---|---|---|
 | GitHub Actions 自動実行 | ✅ 設定済み | 毎日22:00 UTC = 07:00 JST |
 | 動画制作（Remotion） | ✅ 稼働中 | `articles/` の音声+JSONを素材にMP4生成。手順は [video/README.md](video/README.md) |
 | 記事投稿（note等） | 🔲 手動 | `articles/` に保存したMDを配信先へ投稿 |
