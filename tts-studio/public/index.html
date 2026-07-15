@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WKFL TTS Studio</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #181c26; --panel2: #1f2431; --border: #2a3040;
+    --text: #e6e9f0; --dim: #8b93a7; --accent: #6366f1; --accent2: #818cf8;
+    --ok: #34d399; --warn: #fbbf24; --err: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Hiragino Sans", sans-serif; font-size: 14px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px 80px; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; }
+  header h1 { font-size: 20px; margin: 0; }
+  header .badge { font-size: 11px; color: var(--dim); }
+  .badge.mock { color: var(--warn); font-weight: 700; }
+  .grid { display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 18px; }
+  .panel h2 { font-size: 13px; margin: 0 0 12px; color: var(--accent2); text-transform: uppercase; letter-spacing: .06em; }
+  label { display: block; font-size: 12px; color: var(--dim); margin: 10px 0 4px; }
+  select, textarea, input, button { font-family: inherit; font-size: 13px; }
+  select, input[type=text] { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px; resize: vertical; line-height: 1.7; }
+  button { cursor: pointer; border: none; border-radius: 8px; padding: 8px 14px; background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  button.primary:hover { background: var(--accent2); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .section-card { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .section-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .section-card .head .id { font-weight: 700; color: var(--accent2); font-size: 12px; }
+  .section-card .head .chars { font-size: 11px; color: var(--dim); }
+  .section-card textarea { border: none; background: transparent; padding: 0; min-height: 60px; }
+  .voice-desc { font-size: 11px; color: var(--dim); margin-top: 4px; min-height: 28px; }
+  #log { font-family: ui-monospace, monospace; font-size: 11px; line-height: 1.7; max-height: 220px; overflow-y: auto; white-space: pre-wrap; color: var(--dim); }
+  #log .ok { color: var(--ok); } #log .err { color: var(--err); } #log .warn { color: var(--warn); }
+  audio { width: 100%; margin-top: 10px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--dim); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎙 WKFL TTS Studio</h1>
+    <span class="badge" id="modelBadge"></span>
+    <span class="badge" id="modeBadge"></span>
+  </header>
+
+  <div class="grid">
+    <div><!-- ===== left column: script ===== -->
+      <div class="panel">
+        <h2>1. 台本</h2>
+        <div class="row">
+          <select id="dateSel" style="max-width:170px"></select>
+          <select id="fileSel" style="max-width:230px"></select>
+          <button id="loadBtn">読み込み</button>
+        </div>
+        <label>台本テキスト（直接貼り付けも可）</label>
+        <textarea id="draft" rows="8" placeholder="# タイトル&#10;&#10;皆さんおはようございます。今日もAI、回してますか？…"></textarea>
+        <div class="row" style="margin-top:10px">
+          <button id="splitBtn" class="primary">セクションに分割</button>
+          <span class="badge" id="splitInfo"></span>
+        </div>
+      </div>
+
+      <div class="panel" id="sectionsPanel" style="display:none">
+        <h2>2. セクション（編集可・[interval: 2s] タグ使用可）</h2>
+        <div id="sections"></div>
+      </div>
+    </div>
+
+    <div><!-- ===== right column: settings & render ===== -->
+      <div class="panel">
+        <h2>3. 設定</h2>
+        <label>ナレーター</label>
+        <select id="voiceSel"></select>
+        <div class="voice-desc" id="voiceDesc"></div>
+        <label>ペルソナ（読み方の演出）</label>
+        <select id="personaSel"></select>
+        <textarea id="personaText" rows="2" style="margin-top:6px"></textarea>
+        <label>BGM</label>
+        <select id="bgmSel"></select>
+      </div>
+
+      <div class="panel">
+        <h2>4. 生成</h2>
+        <div class="row">
+          <button id="renderBtn" class="primary" style="flex:1">▶ 一括生成（プレビュー）</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="saveBtn" style="flex:1" disabled>💾 articles/{date}/ に保存</button>
+        </div>
+        <audio id="player" controls style="display:none"></audio>
+        <div class="badge" id="renderInfo" style="margin-top:8px"></div>
+      </div>
+
+      <div class="panel">
+        <h2>ログ</h2>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let CFG = null;
+let lastRender = null; // {url, totalMs, timing}
+
+function log(msg, cls = "") {
+  const el = document.createElement("div");
+  el.textContent = `${new Date().toLocaleTimeString()}  ${msg}`;
+  if (cls) el.className = cls;
+  $("log").prepend(el);
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { msg = (await res.json()).error ?? msg; } catch {}
+    throw new Error(msg);
+  }
+  return res;
+}
+
+// ---------- init ----------
+async function init() {
+  CFG = await (await api("/api/config")).json();
+  $("modelBadge").textContent = CFG.model;
+  if (CFG.mock) { $("modeBadge").textContent = "MOCKモード（API未使用）"; $("modeBadge").className = "badge mock"; }
+  else if (!CFG.hasApiKey) { $("modeBadge").textContent = "⚠ GEMINI_API_KEY 未設定"; $("modeBadge").className = "badge mock"; }
+
+  // voices
+  for (const v of CFG.voices) {
+    const o = new Option(`${v.name}（${v.gender}）`, v.id, false, v.id === CFG.defaults.voice);
+    $("voiceSel").add(o);
+  }
+  const updVoiceDesc = () => {
+    const v = CFG.voices.find((x) => x.id === $("voiceSel").value);
+    $("voiceDesc").textContent = v ? v.description : "";
+  };
+  $("voiceSel").onchange = updVoiceDesc; updVoiceDesc();
+
+  // personas
+  for (const key of Object.keys(CFG.personas)) {
+    $("personaSel").add(new Option(key, key, false, key === CFG.defaults.persona));
+  }
+  $("personaSel").add(new Option("custom（自由入力）", "custom"));
+  $("personaSel").add(new Option("なし", "none"));
+  const updPersona = () => {
+    const k = $("personaSel").value;
+    $("personaText").value = k === "custom" || k === "none" ? "" : CFG.personas[k];
+    $("personaText").disabled = k === "none";
+  };
+  $("personaSel").onchange = updPersona; updPersona();
+
+  // bgm
+  for (const key of CFG.bgm) {
+    $("bgmSel").add(new Option(key, key, false, key === CFG.defaults.bgm));
+  }
+  $("bgmSel").add(new Option("なし", "none"));
+
+  // dates
+  const dates = await (await api("/api/dates")).json();
+  for (const d of dates) $("dateSel").add(new Option(d.date, d.date));
+  const updFiles = () => {
+    $("fileSel").innerHTML = "";
+    const d = dates.find((x) => x.date === $("dateSel").value);
+    for (const f of d?.files ?? []) $("fileSel").add(new Option(f, f));
+  };
+  $("dateSel").onchange = updFiles; updFiles();
+
+  log("初期化完了");
+}
+
+// ---------- script loading & splitting ----------
+$("loadBtn").onclick = async () => {
+  try {
+    const date = $("dateSel").value, file = $("fileSel").value;
+    const { content } = await (await api(`/api/script?date=${date}&file=${file}`)).json();
+    $("draft").value = content;
+    log(`${date}/${file} を読み込みました`);
+    $("splitBtn").click();
+  } catch (e) { log(`読み込み失敗: ${e.message}`, "err"); }
+};
+
+$("splitBtn").onclick = async () => {
+  try {
+    const { title, sections } = await (await api("/api/split", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: $("draft").value }),
+    })).json();
+    window._title = title;
+    renderSections(sections);
+    $("splitInfo").textContent = `${sections.length}セクション`;
+    log(`分割: ${sections.length}セクション${title ? `（${title}）` : ""}`, "ok");
+  } catch (e) { log(`分割失敗: ${e.message}`, "err"); }
+};
+
+function renderSections(sections) {
+  const host = $("sections");
+  host.innerHTML = "";
+  sections.forEach((text, i) => {
+    const card = document.createElement("div");
+    card.className = "section-card";
+    card.innerHTML = `
+      <div class="head">
+        <span class="id">s${i + 1}</span>
+        <span class="row">
+          <span class="chars"></span>
+          <button class="preview-btn" title="このセクションだけ試聴">🔊 試聴</button>
+        </span>
+      </div>`;
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    const chars = card.querySelector(".chars");
+    const updCount = () => { chars.textContent = `${ta.value.length}字`; };
+    ta.oninput = updCount; updCount();
+    card.appendChild(ta);
+
+    card.querySelector(".preview-btn").onclick = async (ev) => {
+      const btn = ev.currentTarget;
+      btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>生成中`;
+      try {
+        const res = await api("/api/preview", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: ta.value, voice: $("voiceSel").value, persona: personaValue() }),
+        });
+        const blob = await res.blob();
+        new Audio(URL.createObjectURL(blob)).play();
+        log(`s${i + 1} 試聴音声を生成しました`, "ok");
+      } catch (e) { log(`s${i + 1} 試聴失敗: ${e.message}`, "err"); }
+      btn.disabled = false; btn.textContent = "🔊 試聴";
+    };
+    host.appendChild(card);
+  });
+  $("sectionsPanel").style.display = sections.length ? "" : "none";
+}
+
+function collectSections() {
+  return [...$("sections").querySelectorAll("textarea")].map((t) => t.value.trim()).filter(Boolean);
+}
+function personaValue() {
+  const k = $("personaSel").value;
+  if (k === "none") return "";
+  return $("personaText").value;
+}
+
+// ---------- render & save ----------
+async function render(save) {
+  const sections = collectSections();
+  if (sections.length === 0) { log("セクションがありません。先に分割してください。", "warn"); return; }
+  const btn = save ? $("saveBtn") : $("renderBtn");
+  const orig = btn.textContent;
+  btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>生成中…（${sections.length}セクション）`;
+  try {
+    const body = {
+      sections,
+      voice: $("voiceSel").value,
+      persona: personaValue(),
+      bgm: $("bgmSel").value,
+      date: $("dateSel").value,
+      title: window._title ?? "",
+      save,
+    };
+    const t0 = Date.now();
+    const result = await (await api("/api/render", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })).json();
+    lastRender = result;
+    $("player").src = result.url;
+    $("player").style.display = "";
+    $("renderInfo").textContent = `長さ ${(result.totalMs / 1000).toFixed(1)}秒 / 字幕${result.timing.length}件 / 生成 ${(Date.now() - t0) / 1000 | 0}秒`;
+    $("saveBtn").disabled = false;
+    log(`一括生成 完了（${(result.totalMs / 1000).toFixed(1)}秒の音声）`, "ok");
+    if (result.saved) {
+      log(`保存: ${result.saved.wavPath}`, "ok");
+      log(`保存: ${result.saved.jsonPath}`, "ok");
+      if (result.saved.metaCreated) log("meta.json の雛形を作成しました（topicsは手動で記入）", "warn");
+      if (result.saved.conflictingFiles.length) log(`⚠ 同じフォルダに他の .wav/.json があります: ${result.saved.conflictingFiles.join(", ")}`, "warn");
+      log(`次: cd video && node prepare.mjs ${body.date}`);
+    }
+  } catch (e) { log(`生成失敗: ${e.message}`, "err"); }
+  btn.disabled = false; btn.textContent = orig;
+}
+$("renderBtn").onclick = () => render(false);
+$("saveBtn").onclick = () => render(true);
+
+init().catch((e) => log(`初期化失敗: ${e.message}`, "err"));
+</script>
+</body>
+</html>

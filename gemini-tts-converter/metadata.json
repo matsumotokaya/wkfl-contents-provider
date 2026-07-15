@@ -1,0 +1,5 @@
+{
+  "name": "Gemini TTS Converter",
+  "description": "Convert text to high-quality speech using Gemini 2.5 Flash TTS model.",
+  "requestFramePermissions": []
+}

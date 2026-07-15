@@ -179,6 +179,7 @@ AIポッドキャストパーソナリティ「WKFL」のスタイルで、3つ�
 | ステップ | 状態 | 備考 |
 |---|---|---|
 | GitHub Actions 自動実行 | ✅ 設定済み | 毎日22:00 UTC = 07:00 JST |
+| TTS音声生成（tts-studio） | ✅ 稼働中 | podcast台本→`episode.wav`+タイミングJSONを自動生成。CLI+チューニングUI。手順は [tts-studio/README.md](tts-studio/README.md) |
 | 動画制作（Remotion） | ✅ 稼働中 | `articles/` の音声+JSONを素材にMP4生成。手順は [video/README.md](video/README.md) |
 | 記事投稿（note等） | 🔲 手動 | `articles/` に保存したMDを配信先へ投稿 |
 | X投稿 | 🔲 未実装 | 将来フェーズ |
@@ -291,17 +292,27 @@ AIポッドキャストパーソナリティ「WKFL」のスタイルで、3つ�
 現在の流れ:
 
 1. 記事本編（Markdown）を生成する
-2. 記事をもとに、ポッドキャスト用の話し言葉スクリプトを作る
-3. Google AI StudioでTTS音声を生成する
-4. 必要に応じてBGMや編集を加えて、番組として仕上げる
+2. 記事をもとに、ポッドキャスト用の話し言葉スクリプトを作る（`*_podcast.md`）
+3. **`tts-studio/` でTTS音声＋タイミングJSONを生成する**（下記）
+4. 必要に応じて動画化（Remotion）、番組として仕上げる
 
-### Google AI Studioで使っているTTS
+### TTS生成（tts-studio/ — 自動化済み）
 
-現在は `gemini-2.5-flash-preview-tts` を使用している。
+旧来はGoogle AI Studio上のWebアプリで手動生成していたが、そのロジックをNode.jsに移植し、リポジトリ内で完結するようにした。**手順の正本は [tts-studio/README.md](tts-studio/README.md)。**
 
-- Gemini 2.5 Flash をベースにした、TTS専用のプレビュー版モデル
-- 非常に高速
-- 自然なイントネーションで音声を生成しやすい
+```bash
+# 台本 → articles/{date}/episode.wav + episode.json を一発生成
+cd tts-studio && node cli.mjs 2026-07-13
+
+# ナレーター・BGM等をチューニングしたい時はWeb UI
+npm run ui   # → http://localhost:8787
+```
+
+- モデル: `gemini-3.1-flash-tts-preview`（`tts-studio/config.json` で変更可）
+- BGMミックス（ダッキング・フェード）込みで出力。BGMプリセットは `config.json` で管理
+- 出力はそのまま `video/prepare.mjs` に渡せる
+- 必要な環境変数: `GEMINI_API_KEY`（`tts-studio/.env`）
+- 旧Webアプリは `gemini-tts-converter/` に保存（参照用）
 
 ### 使用できるプリセットボイス
 
@@ -364,8 +375,9 @@ WKFL/
 │       ├── freetalk.md           ← FreeTalk回 記事
 │       ├── freetalk_podcast.md
 │       ├── freetalk_dossier.md
-│       ├── episode.mp3           ← Google AI Studio TTSで生成した音声（手動配置）
-│       └── episode.json          ← TTSアプリが出力するタイムスタンプJSON（手動配置）
+│       ├── episode.wav           ← tts-studio が生成するナレーション音声
+│       └── episode.json          ← tts-studio が生成するタイムスタンプJSON
+├── tts-studio/            ← TTSパイプライン（CLI + チューニングUI。手順は tts-studio/README.md）
 ├── video/                 ← Remotionプロジェクト（動画制作。手順は video/README.md）
 ├── podcast/               ← podcast台本のプライマリ出力先
 │   └── scripts/

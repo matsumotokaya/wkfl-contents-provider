@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx skills *)",
+      "WebFetch(domain:www.watch.impress.co.jp)",
+      "Bash(npm --version)",
+      "Bash(npx create-video@latest --yes --blank --no-tailwind video)",
+      "Bash(npm i *)",
+      "Bash(npx remotion *)",
+      "Bash(echo \"---TSC DONE \\(exit $?\\)---\")",
+      "Bash(git -C /Users/kaya.matsumoto/projects/WKFL mv video/src/Captions.tsx video/src/CaptionTrack.tsx)",
+      "Bash(python3 -c ' *)",
+      "Bash(node prepare.mjs 2026-06-05)",
+      "Bash(tail -6 /private/tmp/claude-503/-Users-kaya-matsumoto-projects-WKFL/f1cfa5c9-ee48-4c08-adbb-a69a42b0d344/tasks/bic02x56z.output)",
+      "Bash(ffprobe -v error -select_streams v:0 -show_entries stream=width,height,codec_name,r_frame_rate -show_entries format=duration,size -of default=noprint_wrappers=1 out/WKFL.mp4)",
+      "Bash(ffmpeg -y -ss 20 -i out/WKFL.mp4 -frames:v 1 out/check-host.png)",
+      "Bash(ffmpeg -y -ss 50 -i out/WKFL.mp4 -frames:v 1 out/check-topic1.png)",
+      "Bash(ffmpeg -y -ss 110 -i out/WKFL.mp4 -frames:v 1 out/check-topic2.png)",
+      "Bash(env -u GH_TOKEN git push origin main)"
+    ]
+  }
+}

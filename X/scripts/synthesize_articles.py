@@ -146,6 +146,7 @@ def extract_article_text(soup, json_ld_objects):
         "article",
         "main",
         ".article-body",
+        ".article-detail-txt",
         ".post-content",
         ".entry-content",
         ".itemizedBox",

@@ -1,0 +1,40 @@
+{
+  "provider": "gemini",
+  "model": "gemini-3.1-flash-tts-preview",
+  "defaults": {
+    "voice": "Charon",
+    "persona": "news",
+    "bgm": "acoustic"
+  },
+  "split": {
+    "maxSectionChars": 1100
+  },
+  "mix": {
+    "sampleRate": 44100,
+    "introDelaySec": 4.0,
+    "sectionGapSec": 1.5,
+    "outroDelaySec": 5.0,
+    "fadeOutSec": 2.0,
+    "bgmVolume": 0.8,
+    "bgmMaxRatio": 0.85,
+    "duckRatio": 0.1
+  },
+  "voices": [
+    { "id": "Charon", "name": "Charon (シャロン)", "gender": "男性", "description": "深みと威厳のある落ち着いた声。ドキュメンタリー、解説向き" },
+    { "id": "Kore", "name": "Kore (コレ)", "gender": "女性", "description": "知的でクリアな聞き取りやすい声。ニュース向き" },
+    { "id": "Puck", "name": "Puck (パック)", "gender": "男性", "description": "明るく温かみのある親しみやすい声。カジュアルトーク向き" },
+    { "id": "Fenrir", "name": "Fenrir (フェンリル)", "gender": "男性", "description": "穏やかで静かな落ち着いた声。朗読向き" },
+    { "id": "Zephyr", "name": "Zephyr (ゼピュロス)", "gender": "女性", "description": "柔らかく優しい声。癒やし系向き" },
+    { "id": "Aoede", "name": "Aoede (アオイデ)", "gender": "女性", "description": "感情豊かでドラマチックな声。ストーリー向き" }
+  ],
+  "personas": {
+    "news": "明るく落ち着いたニュースアナウンサー、感情を込めて説明します。",
+    "critic": "テンポよく論理的に語る。ブラックなユーモアのある批評家。",
+    "youtuber": "フレンドリーで、ユーモアのあるYoutube配信者。"
+  },
+  "bgm": {
+    "acoustic": "../podcast/Acoustic Folk.wav",
+    "fashion": "../podcast/Fashion Summer Promo.wav",
+    "kawaii": "../podcast/KAWAII RYOSAN CORE 1 (Remastered).mp3"
+  }
+}

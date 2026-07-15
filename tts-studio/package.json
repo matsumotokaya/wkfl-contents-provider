@@ -1,0 +1,16 @@
+{
+  "name": "wkfl-tts-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "WKFL podcast TTS pipeline: script -> narration wav + timing json (CLI + tuning Web UI)",
+  "scripts": {
+    "ui": "node server.mjs",
+    "gen": "node cli.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2"
+  }
+}

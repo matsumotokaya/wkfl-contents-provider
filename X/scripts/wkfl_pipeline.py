@@ -266,10 +266,8 @@ Turn the factual dossier below into the final published article.
 ## Body Requirements:
 - For each selected item, start with a simple topic heading: `### ■ [Title] (Source: [source with link])`
 - Immediately below the heading, start speaking.
-- Naturally explain the facts of the topic in spoken Japanese, as if you are explaining it clearly to a friend.
-- Smoothly transition into your personal commentary, using conversational pivots like 「ということで、ついに来ましたね、新モデル！」 or 「いやー、これね、」 or 「まあ、アレですよ」.
-- Write it as flowing, continuous paragraphs without any clunky subheadings.
-- Keep the commentary witty, fair-minded, and sharp. Speak passionately from the perspective of an AI automation addict and designer.
+- Move naturally from the facts into what you make of them — no hard break between the two.
+- Write as flowing, continuous paragraphs.
 
 ## Outro Requirements:
 - When you finish the last topic, transition into a natural closing thought that ties the day together.
@@ -278,7 +276,7 @@ Turn the factual dossier below into the final published article.
 ## Rules:
 - Build the article entirely from the dossier below.
 - Keep every fact anchored to the dossier.
-- Use your persona (first-person "僕", spoken tone, occasional fillers).
+- Write in character as defined in the persona block above.
 - For the title, prioritize the most important 1-2 concrete developments in the dossier, and explicitly name them if they carry the news value.
 - Output language: Japanese.
 - Output format: Markdown.
@@ -397,10 +395,8 @@ Turn the factual dossier below into the final published article.
   - `### ■ [Title]`
   - `Source: [記事タイトル](URL)`
 - Then immediately start speaking.
-- Briefly and naturally explain the source and the facts in spoken Japanese.
-- Smoothly transition into your personal commentary using natural conversational pivots.
-- Write it as flowing, continuous paragraphs without any clunky subheadings.
-- Provide observations from your "AI addict designer" perspective.
+- Move from the facts into what's interesting or significant about them.
+- Write as flowing, continuous paragraphs.
 
 ## Outro Requirements:
 - When you finish the last topic, transition into a natural closing thought.
@@ -409,7 +405,7 @@ Turn the factual dossier below into the final published article.
 ## Rules:
 - Build the article entirely from the dossier below.
 - Keep every fact anchored to the dossier.
-- Use your persona (first-person "僕", spoken tone, occasional fillers).
+- Write in character as defined in the persona block above.
 - For the title, prioritize the most important 1-2 concrete developments in the dossier, and explicitly name them if they carry the news value.
 - Output language: Japanese.
 - Output format: Markdown.
@@ -510,10 +506,7 @@ Turn the structured dossier below into a finished FreeTalk article.
 
 ## Body Requirements:
 - Each topic gets its own section with a plain Markdown heading `### [topic title]`.
-- Immediately below, write as a continuous flowing monologue. Use "僕" throughout.
-- Speak freely about the facts and your insights. Blend them together naturally.
-- Let your passion, curiosity, and minor self-deprecating humor shine.
-- Integrate the commentary organically into the flow of speech without any clunky subheadings.
+- Write as a continuous flowing monologue — think through the ideas out loud, blending facts and interpretation naturally.
 
 ## Outro Requirements:
 - Tie together the topics naturally.
@@ -522,7 +515,7 @@ Turn the structured dossier below into a finished FreeTalk article.
 ## Rules:
 - Build the article entirely from the dossier below.
 - Keep every fact anchored to the dossier.
-- Use your persona (first-person "僕", spoken tone, occasional fillers).
+- Write in character as defined in the persona block above.
 - Output language: Japanese.
 - Output format: Markdown.
 
