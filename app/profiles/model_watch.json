@@ -1,0 +1,21 @@
+{
+  "name": "AI Model & Platform Watch",
+  "description": "フロンティアモデルの進化、中国発の安価・オープンウェイトモデル、主要プロバイダーのAPI/プラットフォーム動向（レートリミット・価格改定等）を追跡",
+  "google_news_keywords": [
+    "GPT-5", "Claude Opus", "Claude Sonnet", "Gemini 3", "Grok",
+    "frontier model", "open-weight model", "open source LLM",
+    "DeepSeek", "Qwen", "Kimi", "GLM", "MiniMax", "Yi model",
+    "rate limit", "usage limit reset", "API pricing", "free tier", "quota",
+    "OpenAI API", "Anthropic API", "Google AI Studio", "Vertex AI",
+    "フロンティアモデル", "中国製AI", "オープンウェイト", "値下げ",
+    "無料枠", "レートリミット", "利用制限", "API料金", "使用量リセット"
+  ],
+  "google_news_limit": 25,
+  "google_news_time_filter_hours": 72,
+  "sources": [
+    { "name": "Reddit: r/OpenAI", "url": "https://www.reddit.com/r/OpenAI/new/.rss?limit=25", "active": false },
+    { "name": "Reddit: r/ClaudeAI", "url": "https://www.reddit.com/r/ClaudeAI/new/.rss?limit=25", "active": false },
+    { "name": "Reddit: r/singularity", "url": "https://www.reddit.com/r/singularity/new/.rss?limit=25", "active": false },
+    { "name": "Reddit: r/Bard", "url": "https://www.reddit.com/r/Bard/new/.rss?limit=25", "active": false }
+  ]
+}
