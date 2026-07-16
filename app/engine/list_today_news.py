@@ -8,10 +8,11 @@ from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
 from anthropic import Anthropic
 
+from ingest_rss import load_profile, DEFAULT_PROFILE
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
 RAW_DATA_DIR = os.path.join(BASE_DIR, "..", "data", "raw_feeds")
-CONFIG_PATH = os.path.join(BASE_DIR, "..", "data", "db", "user_config.json")
 
 # Model used for the daily news-feed summary. Overridable via env.
 SUMMARY_MODEL = os.environ.get("WKFL_SUMMARY_MODEL", "claude-opus-4-8")
@@ -111,17 +112,11 @@ def main(theme=None):
         print("📭 No articles matched today's keywords.")
         return 0
 
-    # Check if theme allows Reddit (check config for reddit_no_filter flag)
-    reddit_included = False
-    if theme:
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                config = json.load(f)
-                themes = config.get("themes", {})
-                if theme in themes:
-                    reddit_included = themes[theme].get("reddit_no_filter", False)
-        except:
-            pass
+    # Load the selected profile (a 'cut' of sources/keywords) once, reused below.
+    profile = load_profile(theme or DEFAULT_PROFILE) or {}
+
+    # Check if the profile allows Reddit (reddit_no_filter flag)
+    reddit_included = profile.get("reddit_no_filter", False)
 
     # Step 2: Group articles by source, excluding Reddit (unless reddit_no_filter is True)
     grouped = {}
@@ -147,21 +142,8 @@ def main(theme=None):
         ""
     ]
 
-    # Load config to get all sources for this theme
-    all_sources = []
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            config = json.load(f)
-            themes = config.get("themes", {})
-            if theme:
-                if theme in themes:
-                    all_sources = [s["name"] for s in themes[theme].get("sources", []) if s.get("active", True)]
-            else:
-                default_theme = config.get("default_theme", "general")
-                if default_theme in themes:
-                    all_sources = [s["name"] for s in themes[default_theme].get("sources", []) if s.get("active", True)]
-    except:
-        pass
+    # Get all sources for this profile (already loaded above)
+    all_sources = [s["name"] for s in profile.get("sources", []) if s.get("active", True)]
 
     # Display all sources, whether they have entries or not
     if all_sources:

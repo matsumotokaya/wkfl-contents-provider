@@ -1,0 +1,13 @@
+{
+  "name": "Local LLM Deep Dive",
+  "description": "ローカルLLM関連のニュースを深掘り",
+  "google_news_keywords": ["Local LLM", "ローカルLLM", "Ollama", "llama.cpp", "GGUF", "Gemma", "Llama", "Qwen", "Mistral", "Phi", "DeepSeek", "GLM", "Bonsai", "MLX", "ExLlama", "LM Studio", "vLLM", "open-weight", "量子化", "ONNX", "オンデバイス", "エッジAI"],
+  "google_news_limit": 20,
+  "google_news_time_filter_hours": 168,
+  "sources": [
+    { "name": "Reddit: r/LocalLLM", "url": "https://www.reddit.com/r/LocalLLM/new/.rss?limit=25", "active": false },
+    { "name": "Reddit: r/LocalLLaMA", "url": "https://www.reddit.com/r/LocalLLaMA/new/.rss?limit=25", "active": false },
+    { "name": "Reddit: r/Ollama", "url": "https://www.reddit.com/r/Ollama/new/.rss?limit=25", "active": false },
+    { "name": "Reddit: r/LocalAI", "url": "https://www.reddit.com/r/LocalAI/new/.rss?limit=25", "active": false }
+  ]
+}

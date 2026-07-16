@@ -1,7 +1,7 @@
 # WKFL TTS Studio
 
 podcast台本（`articles/{date}/*_podcast.md`）から、ナレーション音声＋字幕タイミングJSONを生成するパイプライン。
-AI Studio上のWebアプリ（`gemini-tts-converter/`）のコアロジックをNode.jsに移植し、WKFLのワークフローに組み込んだもの。
+元はAI Studio上のWebアプリ（`gemini-tts-converter/`、移植完了に伴い削除済み）のコアロジックをNode.jsに移植し、WKFLのワークフローに組み込んだもの。
 
 - **CLI**: 台本→ `articles/{date}/episode.wav` + `episode.json` を一発生成（自動化用）
 - **Web UI**: ナレーター・ペルソナ・BGMを選びながらチューニングする作業台

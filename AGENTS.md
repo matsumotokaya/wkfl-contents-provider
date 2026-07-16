@@ -39,10 +39,10 @@ Rules:
 - Do not draft the final article directly from source URLs unless the user explicitly says to skip the dossier stage.
 - Treat the README pipeline description as an execution rule for Pickup News work, not as optional guidance.
 - The primary deliverable is file output under `articles/{date}/`, not chat-only draft text.
-- Preserve the existing two-stage structure from `X/scripts/wkfl_pipeline.py`:
+- Preserve the existing two-stage structure from `app/engine/wkfl_pipeline.py`:
   - Stage 1: factual dossier / planning document
   - Stage 2: styled final article
-- Apply the title rules defined in `X/scripts/wkfl_pipeline.py`, not just approximate length:
+- Apply the title rules defined in `app/engine/wkfl_pipeline.py`, not just approximate length:
   - write a single highly engaging title of around 60 Japanese characters
   - hint at a deep takeaway, positive paradigm shift, or builder-relevant implication
   - avoid simple news-reporting titles

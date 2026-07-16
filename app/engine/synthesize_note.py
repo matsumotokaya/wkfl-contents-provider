@@ -27,7 +27,6 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
 # --- PATH CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(BASE_DIR, "..", "data", "db", "user_config.json")
 
 # --- MODEL CONFIGURATION ---
 # Environment variable override: WKFL_MODEL=gpt-5.4

@@ -15,8 +15,8 @@ from jinja2 import Environment, FileSystemLoader
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
-NOTE_DIR = os.path.join(PROJECT_ROOT, "note")
-SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "X", "scripts")
+NOTE_DIR = os.path.join(PROJECT_ROOT, "media", "note")
+SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "app", "engine")
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 
 app = FastAPI()
@@ -24,7 +24,7 @@ jinja_env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), cache_size=0)
 
 # Ensure required directories exist (not in git)
 os.makedirs(NOTE_DIR, exist_ok=True)
-os.makedirs(os.path.join(PROJECT_ROOT, "X", "data", "raw_feeds"), exist_ok=True)
+os.makedirs(os.path.join(PROJECT_ROOT, "app", "data", "raw_feeds"), exist_ok=True)
 
 # In-memory generation job state
 _job: dict = {"running": False, "last": None}

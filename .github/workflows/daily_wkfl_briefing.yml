@@ -49,7 +49,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run daily pipeline
-        run: python X/scripts/run_all.py
+        run: python app/engine/run_all.py
 
       - name: Resolve JST date and verify outputs
         run: |
@@ -57,7 +57,7 @@ jobs:
           ARTICLE_PATH="articles/${DATE_JST}/reddit.md"
           PODCAST_PATH="articles/${DATE_JST}/reddit_podcast.md"
           DOSSIER_PATH="articles/${DATE_JST}/reddit_dossier.md"
-          RAW_PATH="X/data/raw_feeds/${DATE_JST}_raw.json"
+          RAW_PATH="app/data/raw_feeds/${DATE_JST}_raw.json"
 
           if [ ! -f "${ARTICLE_PATH}" ]; then
             echo "Expected article file not found: ${ARTICLE_PATH}" >&2

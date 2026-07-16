@@ -33,8 +33,8 @@
     "youtuber": "フレンドリーで、ユーモアのあるYoutube配信者。"
   },
   "bgm": {
-    "acoustic": "../podcast/Acoustic Folk.wav",
-    "fashion": "../podcast/Fashion Summer Promo.wav",
-    "kawaii": "../podcast/KAWAII RYOSAN CORE 1 (Remastered).mp3"
+    "acoustic": "../media/podcast/Acoustic Folk.wav",
+    "fashion": "../media/podcast/Fashion Summer Promo.wav",
+    "kawaii": "../media/podcast/KAWAII RYOSAN CORE 1 (Remastered).mp3"
   }
 }

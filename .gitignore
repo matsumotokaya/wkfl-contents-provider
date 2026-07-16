@@ -4,11 +4,11 @@ __pycache__/
 *.pyo
 *.DS_Store
 articles/
-note/
-X/data/raw_feeds/
-Brain/
+media/note/
+app/data/raw_feeds/
+media/Brain/
 .venv/
 node_modules/
 scratch/
-podcast/
+media/podcast/
 tts-studio/out/

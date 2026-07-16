@@ -43,10 +43,10 @@
 
 ```bash
 # ジェネラル版（AI全般）
-python3 X/scripts/list_today_news.py
+python3 app/engine/list_today_news.py
 
 # テーマ特化版（例：ローカルLLM）
-python3 X/scripts/list_today_news.py --theme localllm
+python3 app/engine/list_today_news.py --theme localllm
 ```
 
 ### 実行結果
@@ -57,36 +57,46 @@ python3 X/scripts/list_today_news.py --theme localllm
 1. **記事一覧**: 日付・タイトル・説明付きで表示
 2. **AIによる要約**: 重複テーマを統合し、業界への影響を分析（自動生成）
 
-### 利用可能なテーマ
+### 利用可能なテーマ（探索プロファイル）
 
-- `localllm` — ローカルLLM関連の深掘り情報
-- その他のテーマはカスタマイズ可能（`X/data/db/user_config.json` で設定）
+収集の「切り口」は `app/profiles/` 配下に1ファイル1プロファイルで管理する。`general`/`localllm` はその一例に過ぎず、ファイルを追加するだけで新しい切り口を増やせる再利用可能な仕組みになっている。
 
-### テーマのカスタマイズ
+- `general` — AI全般を幅広くキャッチアップ（`app/profiles/general.json`）
+- `localllm` — ローカルLLM関連の深掘り情報（`app/profiles/localllm.json`）
+- その他のテーマは `app/profiles/` に新規JSONファイルを追加するだけでカスタマイズ可能
 
-新しいテーマを追加する場合（例：TTS関連のニュース）は、`X/data/db/user_config.json` に以下を追加：
+### テーマのカスタマイズ（新しい切り口の追加）
+
+新しいテーマを追加する場合（例：TTS関連のニュース）は、`app/profiles/tts.json` を新規作成する：
 
 ```json
-"themes": {
-  "tts": {
-    "name": "Text-to-Speech Specialist",
-    "google_news_keywords": [
-      "Text-to-Speech", "TTS", "音声合成", "音声生成", "ボイスクローニング"
-    ],
-    "google_news_limit": 20,
-    "google_news_time_filter_hours": 168,
-    "sources": []
-  }
+{
+  "name": "Text-to-Speech Specialist",
+  "google_news_keywords": [
+    "Text-to-Speech", "TTS", "音声合成", "音声生成", "ボイスクローニング"
+  ],
+  "google_news_limit": 20,
+  "google_news_time_filter_hours": 168,
+  "sources": []
 }
 ```
 
-その後、`python3 X/scripts/list_today_news.py --theme tts` を実行。
+既存の `app/profiles/general.json` や `app/profiles/localllm.json` を編集する必要は一切ない。ファイルを1つ追加するだけで切り口が増える。
+
+その後、`python3 app/engine/list_today_news.py --theme tts` を実行。
 
 > [!NOTE]
 > **設定の正本（SSOT）について**
 > - `google_news_keywords` に列挙した語は、そのまま各地域のGoogle Newsへの検索クエリとして発行され、取得後の絞り込みフィルタにも使われる。**検索範囲はこの配列が唯一の正本**（コード側にキーワードのハードコードは無い）。
-> - `google_news_limit` / `google_news_time_filter_hours` を省略した場合の既定値は `X/scripts/ingest_rss.py` の定数で一元管理。
+> - `google_news_limit` / `google_news_time_filter_hours` を省略した場合の既定値は `app/engine/ingest_rss.py` の定数で一元管理。
 > - 対象地域リストは同ファイルの `GOOGLE_NEWS_REGIONS` 定数が正本。現在は英語圏・日本語圏のエディションに限定（最大9エディションまで拡張可能で、追加分は定数直下にコメントで控えてある）。地域を増減すればログ表示にも自動反映される。
+
+> [!WARNING]
+> **Reddit RSSのレート制限（429）について（2026-07-16確認）**
+> - `ingest_rss.py` は複数のReddit系サブレディットを同一実行内で連続取得するが、1回の実行で**最初の1サブレディット（25件程度）を取得した直後から、以降のサブレディットが軒並み `HTTP 429 Too Many Requests` で失敗する**事象を確認済み。
+> - 現状のコードは各フィード取得後に `time.sleep(2)` を挟んでいるだけで、Reddit側の制限を回避できていない。Reddit側がスクレイピング対策を強化してきている可能性が高く、**「同一実行内で複数サブレディットを一気に取る」というこれまでのやり方は前提が崩れつつある**。
+> - 対処が必要な場合は、取得間隔をさらに空ける・実行を複数回に分割する・取得するサブレディット数を減らすといった工夫が要る（現時点では未実装）。
+> - 実行時に一部サブレディットが429で失敗しても、取得できたものだけでDossier以降のプロセスを進めて構わない（その場合は取得元が偏っている旨をユーザーに一言断ってから進める）。
 
 ---
 
@@ -101,10 +111,11 @@ Redditから最新の議論を自動抽出し、API経由で一気にドラフ�
 
 ```bash
 cd /Users/kaya.matsumoto/projects/WKFL
-python3 X/scripts/run_all.py
+python3 app/engine/run_all.py
 ```
 - **実行場所**: ターミナル、またはGitHub Actions（毎朝自動実行）
 - **メリット**: 手間ゼロでAI界隈の「空気感」をキャッチアップできる
+- **注意**: Reddit RSSのレート制限（429）により、複数サブレディットのうち一部しか取得できないことがある。詳細は上の「ニュース取得・調査フェーズ」セクション内の警告を参照。
 
 ### ルートB: ピックアップ・ニュース (Pickup News)
 WKFLが気になった特定のニュースURL（3本前後）を読み込ませ、対話を通じて深い考察を加える「深掘り」ルート。
@@ -114,7 +125,7 @@ WKFLが気になった特定のニュースURL（3本前後）を読み込ませ
 2. **補助：CLIでの一括処理**
    - APIキーを使って機械的にファイル生成まで行いたい場合は以下を使用する
    ```bash
-   python3 X/scripts/synthesize_articles.py "URL1" "URL2" "URL3"
+   python3 app/engine/synthesize_articles.py "URL1" "URL2" "URL3"
    ```
 
 ### ルートC: フリートーク (FreeTalk)
@@ -133,11 +144,11 @@ WKFLが語りたいテーマや考察を口頭・テキストで投げ、それ�
 2. **補助：CLIでの一括処理**
    - メモをテキストファイルにまとめてある場合は以下を使用する
    ```bash
-   python3 X/scripts/synthesize_freetalk.py myideas.txt
+   python3 app/engine/synthesize_freetalk.py myideas.txt
    ```
    - stdinで直打ちする場合（Ctrl+Dで終了）
    ```bash
-   python3 X/scripts/synthesize_freetalk.py
+   python3 app/engine/synthesize_freetalk.py
    ```
 
 ---
@@ -160,8 +171,8 @@ AIポッドキャストパーソナリティ「WKFL」のスタイルで、3つ�
 |---|---|---|
 | RSS収集 (`ingest_rss.py`) | ✅ 動作中 | テーマ別・キーワードフィルター対応。Google News統合処理実装済み |
 | ニュースフィード生成 (`list_today_news.py`) | ✅ 動作中 | ジェネラル版・テーマ特化版両対応 |
-| テーマプロファイルシステム | ✅ 実装済み | `general`, `localllm` 稼働中 |
-| **ローカルLLM テーマ（新）** | ✅ 稼働中 | Google News（英語圏・日本語圏）をテーマ定義のキーワードで横断検索。検索語・件数・収集期間の正本は `user_config.json` のテーマ設定 |
+| テーマプロファイルシステム | ✅ 実装済み | `app/profiles/*.json` で1切り口1ファイル管理。`general`, `localllm` 稼働中 |
+| **ローカルLLM テーマ（新）** | ✅ 稼働中 | Google News（英語圏・日本語圏）をテーマ定義のキーワードで横断検索。検索語・件数・収集期間の正本は `app/profiles/localllm.json` |
 | **Google News 統合処理（新）** | ✅ 実装済み | 複数地域・複数キーワードの検索結果を統合。重複除去＋時系列ソート＋件数制限 |
 | テーマ別0件表示 | ✅ 実装済み | マッチなしメディアも表示 |
 
@@ -312,7 +323,7 @@ npm run ui   # → http://localhost:8787
 - BGMミックス（ダッキング・フェード）込みで出力。BGMプリセットは `config.json` で管理
 - 出力はそのまま `video/prepare.mjs` に渡せる
 - 必要な環境変数: `GEMINI_API_KEY`（`tts-studio/.env`）
-- 旧Webアプリは `gemini-tts-converter/` に保存（参照用）
+- 旧Webアプリ（`gemini-tts-converter/`）はtts-studioへの移植・統合が完了したため削除済み
 
 ### 使用できるプリセットボイス
 
@@ -379,21 +390,37 @@ WKFL/
 │       └── episode.json          ← tts-studio が生成するタイムスタンプJSON
 ├── tts-studio/            ← TTSパイプライン（CLI + チューニングUI。手順は tts-studio/README.md）
 ├── video/                 ← Remotionプロジェクト（動画制作。手順は video/README.md）
-├── podcast/               ← podcast台本のプライマリ出力先
-│   └── scripts/
-└── X/
-    ├── data/
-    │   ├── db/
-    │   │   └── user_config.json   ← RSSソース設定
-    │   └── raw_feeds/
-    │       └── YYYY-MM-DD_raw.json ← 当日の取得データ
-    ├── drafts/            ← X投稿の下書き（将来用）
-    ├── posted/            ← X投稿済みログ（将来用）
-    └── scripts/
-        ├── run_all.py              ← エントリーポイント（Reddit回）
-        ├── ingest_rss.py           ← Step 1: RSS取得
-        ├── synthesize_note.py      ← Step 2: AI記事生成（Reddit回）
-        └── synthesize_articles.py  ← AI記事生成（セレクト記事回）
+├── app/                   ← プロジェクトのエンジン本体（収集・生成パイプライン + 停止中のWeb UI）
+│   ├── main.py              ← Web UI（FastAPI、現在停止中）
+│   ├── templates/            ← Web UI用テンプレート
+│   ├── engine/                ← 収集・記事生成パイプライン本体
+│   │   ├── run_all.py             ← エントリーポイント（Reddit回）
+│   │   ├── ingest_rss.py          ← Step 1: RSS/Google News取得
+│   │   ├── list_today_news.py     ← ニュースフィード生成（ルートB/C下調べ用）
+│   │   ├── synthesize_note.py     ← Step 2: AI記事生成（Reddit回）
+│   │   ├── synthesize_articles.py ← AI記事生成（セレクト記事回）
+│   │   ├── synthesize_freetalk.py ← AI記事生成（FreeTalk回）
+│   │   ├── wkfl_pipeline.py       ← プロンプトテンプレート・モデル呼び出し共通処理
+│   │   └── wkfl_persona.py        ← WKFLペルソナ定義（正本）
+│   ├── profiles/                ← 探索の「切り口」を1ファイル1プロファイルで管理
+│   │   ├── general.json           ← AI全般（デフォルト）
+│   │   └── localllm.json          ← ローカルLLM特化
+│   └── data/                    ← エンジンが読み書きするデータ
+│       ├── raw_feeds/             ← 日次の生データ（gitignore対象）
+│       │   └── YYYY-MM-DD_raw.json
+│       └── manual_articles/       ← 手動投入記事の保存例
+└── media/                 ← 個別サービス・素材系をまとめた置き場（各ディレクトリの中身自体は非稼働の単純データ）
+    ├── X/                   ← X（Twitter）投稿専用（将来用）
+    │   ├── drafts/            ← X投稿の下書き
+    │   ├── posted/            ← X投稿済みログ
+    │   ├── list/               ← Xリスト取得結果
+    │   └── requirements.txt     ← X投稿用の依存（tweepy等）
+    ├── podcast/              ← podcast台本のプライマリ出力先＋BGM素材（tts-studio/config.jsonが参照）
+    │   └── scripts/
+    ├── brand/                ← ロゴ・ホスト画像等（video/prepare.mjsが参照）
+    ├── note/                  ← note.com投稿用サムネイル等（停止中Web UIのみ参照）
+    ├── Brain/                 ← 予備（現状空・未使用）
+    └── book/                  ← 企画書等の下書き置き場
 ```
 
 ---
@@ -459,18 +486,18 @@ python3 -m uvicorn app.main:app --reload
 
 ```bash
 cd /Users/kaya.matsumoto/projects/WKFL
-python3 X/scripts/run_all.py
+python3 app/engine/run_all.py
 ```
 
 これだけ。以下の2ステップが順に実行される:
 
-1. **RSS収集**: 4つのサブレディットから過去24時間の投稿を取得 → `X/data/raw_feeds/YYYY-MM-DD_raw.json`
+1. **RSS収集**: 4つのサブレディットから過去24時間の投稿を取得 → `app/data/raw_feeds/YYYY-MM-DD_raw.json`
 2. **記事生成**: LLM APIを呼び出して日本語記事を生成 → `articles/YYYY-MM-DD/reddit.md`（併せて `reddit_podcast.md`, `reddit_dossier.md` も出力）
 
 既に当日のraw JSONがある場合（再生成したいとき）はStep 2だけ実行:
 
 ```bash
-python3 X/scripts/synthesize_note.py
+python3 app/engine/synthesize_note.py
 ```
 
 ### モデル切り替え
@@ -478,13 +505,13 @@ python3 X/scripts/synthesize_note.py
 デフォルトは `gpt-5.4`。Anthropicへ切り替えるには:
 
 ```bash
-WKFL_MODEL=claude-opus-4-6 python3 X/scripts/synthesize_note.py
+WKFL_MODEL=claude-opus-4-6 python3 app/engine/synthesize_note.py
 ```
 
 ステージごとにモデルを分ける場合:
 
 ```bash
-WKFL_FACT_MODEL=gpt-5.4 WKFL_STYLE_MODEL=gpt-5.4 python3 X/scripts/synthesize_note.py
+WKFL_FACT_MODEL=gpt-5.4 WKFL_STYLE_MODEL=gpt-5.4 python3 app/engine/synthesize_note.py
 ```
 
 ### ローカル通常運用: セレクト記事回
@@ -497,7 +524,7 @@ WKFL_FACT_MODEL=gpt-5.4 WKFL_STYLE_MODEL=gpt-5.4 python3 X/scripts/synthesize_no
 Redditの定点観測とは別に、**WKFLが指定した3本前後の記事URLを素材にして** スポット回を生成できる。
 
 ```bash
-python3 X/scripts/synthesize_articles.py \
+python3 app/engine/synthesize_articles.py \
   "https://forbesjapan.com/articles/detail/94270" \
   "https://qiita.com/kotauchisunsun/items/ab78bb338500b4c71103" \
   "https://dev.classmethod.jp/articles/cursor-3-0-multi-agent-features-guide/"
@@ -535,7 +562,7 @@ python3 X/scripts/synthesize_articles.py \
 - 必要なSecrets: `OPENAI_API_KEY`（推奨）または `ANTHROPIC_API_KEY`（フォールバック用）
 - 成果物の確認先: GitHubのActions画面
   - Run Summaryに記事冒頭を表示
-  - Artifactに `articles/YYYY-MM-DD/reddit*.md` と `X/data/raw_feeds/YYYY-MM-DD_raw.json` を保存
+  - Artifactに `articles/YYYY-MM-DD/reddit*.md` と `app/data/raw_feeds/YYYY-MM-DD_raw.json` を保存
 
 補足:
 - この定期実行はローカルPCには依存しない
@@ -549,20 +576,21 @@ python3 X/scripts/synthesize_articles.py \
 
 ## RSSソース設定
 
-`X/data/db/user_config.json` でソースを管理する。
+ソースは `app/profiles/*.json` で切り口（プロファイル）ごとに管理する。例えば `app/profiles/general.json` の `sources` は以下のような形:
 
 ```json
 {
+  "name": "General AI News",
+  "description": "AI全般のニュースを幅広くキャッチアップ",
+  "reddit_no_filter": true,
   "sources": [
-    { "name": "Reddit: r/ArtificialInteligence", "url": "https://www.reddit.com/r/ArtificialInteligence/new/.rss", "active": true },
-    { "name": "Reddit: r/MachineLearning",        "url": "https://www.reddit.com/r/MachineLearning/new/.rss",        "active": true },
-    { "name": "Reddit: r/OpenAI",                 "url": "https://www.reddit.com/r/OpenAI/new/.rss",                 "active": true },
-    { "name": "Reddit: r/LocalLLaMA",             "url": "https://www.reddit.com/r/LocalLLaMA/new/.rss",             "active": true }
+    { "name": "Reddit: r/LocalLLaMA", "url": "https://www.reddit.com/r/LocalLLaMA/new/.rss?limit=25", "active": true },
+    { "name": "PR TIMES", "url": "https://prtimes.jp/index.rdf", "active": true, "keywords": ["AI", "人工知能", "LLM"] }
   ]
 }
 ```
 
-`active: false` にすると収集対象から外れる。URLを追加すれば即対応。
+`active: false` にすると収集対象から外れる。ソースを追加すれば即対応。新しい切り口（プロファイル）自体を追加したい場合は、上の「テーマのカスタマイズ」セクションを参照。
 
 ---
 

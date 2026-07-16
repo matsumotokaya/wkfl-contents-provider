@@ -49,5 +49,6 @@ RSSから新着記事を自動検知できますが、有料会員限定など�
 
 ## 収集設定の管理ファイル
 
-すべてのソースのURLや抽出用キーワードは、以下のJSONファイルで管理されています。
-- [X/data/db/user_config.json](file:///Users/kaya.matsumoto/projects/WKFL/X/data/db/user_config.json)
+すべてのソースのURLや抽出用キーワードは、探索の「切り口」ごとに1ファイルで管理されています（`app/profiles/`）。
+- [app/profiles/general.json](file:///Users/kaya.matsumoto/projects/WKFL/app/profiles/general.json)
+- [app/profiles/localllm.json](file:///Users/kaya.matsumoto/projects/WKFL/app/profiles/localllm.json)

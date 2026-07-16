@@ -14,7 +14,8 @@ from bs4 import BeautifulSoup
 # --- PATH CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RAW_DATA_DIR = os.path.join(BASE_DIR, "..", "data", "raw_feeds")
-CONFIG_PATH = os.path.join(BASE_DIR, "..", "data", "db", "user_config.json")
+PROFILES_DIR = os.path.join(BASE_DIR, "..", "profiles")
+DEFAULT_PROFILE = "general"
 
 # Google News regional domains. Single source of truth for both the search loop
 # and the "N regions" status message. The active set is limited to English- and
@@ -34,34 +35,25 @@ GOOGLE_NEWS_REGIONS = [
 #   "news.google.fr"       # France (French)
 #   "news.google.com.br"   # Brazil (Portuguese)
 
-# Default Google News collection parameters. Overridable per theme in
-# user_config.json (google_news_limit / google_news_time_filter_hours).
+# Default Google News collection parameters. Overridable per profile
+# (google_news_limit / google_news_time_filter_hours in app/profiles/<name>.json).
 DEFAULT_GOOGLE_NEWS_LIMIT = 20
 DEFAULT_GOOGLE_NEWS_TIME_FILTER_HOURS = 168
 
+def load_profile(profile_name):
+    """Load an exploration profile (a 'cut' of sources/keywords) from app/profiles/<name>.json."""
+    path = os.path.join(PROFILES_DIR, f"{profile_name}.json")
+    if not os.path.exists(path):
+        print(f"❌ Profile '{profile_name}' not found at {path}.", file=sys.stderr)
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 def load_feeds_from_db(theme=None):
-    if not os.path.exists(CONFIG_PATH):
+    profile = load_profile(theme or DEFAULT_PROFILE)
+    if not profile:
         return []
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        config = json.load(f)
-
-    # If theme is specified, load from themes; otherwise use default
-    if theme:
-        themes = config.get("themes", {})
-        if theme not in themes:
-            print(f"❌ Theme '{theme}' not found in config.", file=sys.stderr)
-            return []
-        sources = themes[theme].get("sources", [])
-    else:
-        # Fallback to default theme or old-style sources
-        default_theme = config.get("default_theme", "general")
-        themes = config.get("themes", {})
-        if default_theme in themes:
-            sources = themes[default_theme].get("sources", [])
-        else:
-            sources = config.get("sources", [])
-
-    return [s for s in sources if s.get("active", True)]
+    return [s for s in profile.get("sources", []) if s.get("active", True)]
 
 def match_keywords(text_to_search, keywords):
     if not keywords:
@@ -290,24 +282,12 @@ def fetch_google_news(keywords, time_filter_hours, limit):
 def fetch_feeds(theme=None):
     os.makedirs(RAW_DATA_DIR, exist_ok=True)
 
-    # Load default_keywords and Google News config for the theme if available
-    default_keywords = []
-    google_news_keywords = []
-    google_news_limit = DEFAULT_GOOGLE_NEWS_LIMIT
-    google_news_time_filter = DEFAULT_GOOGLE_NEWS_TIME_FILTER_HOURS
-
-    if theme:
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                config = json.load(f)
-                themes = config.get("themes", {})
-                if theme in themes:
-                    default_keywords = themes[theme].get("default_keywords", [])
-                    google_news_keywords = themes[theme].get("google_news_keywords", [])
-                    google_news_limit = themes[theme].get("google_news_limit", DEFAULT_GOOGLE_NEWS_LIMIT)
-                    google_news_time_filter = themes[theme].get("google_news_time_filter_hours", DEFAULT_GOOGLE_NEWS_TIME_FILTER_HOURS)
-        except:
-            pass
+    # Load default_keywords and Google News config from the selected profile
+    profile = load_profile(theme or DEFAULT_PROFILE) or {}
+    default_keywords = profile.get("default_keywords", [])
+    google_news_keywords = profile.get("google_news_keywords", [])
+    google_news_limit = profile.get("google_news_limit", DEFAULT_GOOGLE_NEWS_LIMIT)
+    google_news_time_filter = profile.get("google_news_time_filter_hours", DEFAULT_GOOGLE_NEWS_TIME_FILTER_HOURS)
 
     all_entries = []
 

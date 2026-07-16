@@ -15,7 +15,7 @@
 
 ## 参照すべきプロンプトテンプレート
 
-`X/scripts/wkfl_pipeline.py` に全テンプレートがある:
+`app/engine/wkfl_pipeline.py` に全テンプレートがある:
 
 | 段階 | ルートB用テンプレート |
 |---|---|
@@ -27,7 +27,7 @@
 
 ## ペルソナ
 
-`X/scripts/wkfl_persona.py` の `WKFL_PERSONA_BLOCK` が正本。
+`app/engine/wkfl_persona.py` の `WKFL_PERSONA_BLOCK` が正本。
 
 - 一人称: 「僕」
 - 最終行: 「それでは、また明日お会いしましょう。」

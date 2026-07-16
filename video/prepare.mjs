@@ -112,11 +112,11 @@ writeFileSync(join(pub, "episode.json"), JSON.stringify(episodeData, null, 2));
 
 // Host image + program logo.
 copyFileSync(
-  join(repoRoot, "brand", "Japanese_man_wearing_202604202213.jpeg"),
+  join(repoRoot, "media", "brand", "Japanese_man_wearing_202604202213.jpeg"),
   join(pub, "host.jpeg"),
 );
 copyFileSync(
-  join(repoRoot, "brand", "logo_wkfl_white_001.png"),
+  join(repoRoot, "media", "brand", "logo_wkfl_white_001.png"),
   join(pub, "logo.png"),
 );
 
