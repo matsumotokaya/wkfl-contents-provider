@@ -11,3 +11,5 @@ IDEで原稿を保存し、ChatGPTデスクトップアプリにパスを渡し�
 | `podcast/` | 台本関連・BGM素材。生成手順は `tts-studio/README.md` | [完成音声の引き継ぎと配信確認](../playbooks/publishing.md) |
 
 媒体ごとの実行可否・検証状況はプレイブックに集約する。
+
+サムネイル等の画像生成は `tools/image_fal.py`（fal経由の gpt-image-2.5。鍵は `~/.secrets/fal-token`、使い方は冒頭の docstring）。作業は `note/thumbnail/<日付>_<題材>/` に `inputs/` `prompts/` `takes/` `final/` で置く。
