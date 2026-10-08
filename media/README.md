@@ -12,4 +12,4 @@ IDEで原稿を保存し、ChatGPTデスクトップアプリにパスを渡し�
 
 媒体ごとの実行可否・検証状況はプレイブックに集約する。
 
-サムネイル等の画像生成は `tools/image_fal.py`（fal経由の gpt-image-2.5。鍵は `~/.secrets/fal-token`、使い方は冒頭の docstring）。作業は `note/thumbnail/<日付>_<題材>/` に `inputs/` `prompts/` `takes/` `final/` で置く。
+noteのサムネイルは [サムネイルの作り方](../playbooks/note-thumbnail.md)（サイズ・道具・プロンプト・作例）。
