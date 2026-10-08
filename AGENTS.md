@@ -26,6 +26,12 @@ If account/permissions are wrong:
 
 ## Content Pipeline Rules
 
+### X投稿
+
+- Xの文案作成・修正・公開前には毎回 `media/X/STYLE.md` と `playbooks/publishing.md` を読む。別の担当へ引き継ぐ際も、この2ファイルの絶対パスを渡す。
+- X単独の投稿は、ユーザーの発言と必要な事実確認から短い文案を作る。記事化を伴う場合は該当する記事制作手順を適用する。
+- 投稿結果と修正依頼は `media/X/posted/` に記録し、文体についての明示的なフィードバックを `media/X/STYLE.md` に反映する。
+
 ### Pickup News Pipeline Rule (Mandatory)
 
 When the user asks to create a Pickup News / Selected Articles article, always follow the selected-articles pipeline.

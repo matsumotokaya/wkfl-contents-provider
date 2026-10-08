@@ -50,7 +50,7 @@
   {
     "id": "tweet_2108055188913459626",
     "content": "1/2\n「Opus 5.5、NERFされた？」\n新モデルが数日で雑になる感覚、私もある。\n\nでも「最初だけ計算資源を盛る宣伝戦略」とまでは言い切れない。\n同じモデルでも、考える量の設定や会話履歴の扱い、アプリ側の指示で仕事の質は変わる。\n実際、Claude Codeではその周辺で品質低下が起きていた。",
-    "status": "posted",
+    "status": "deleted",
     "type": "thread",
     "posted_at": "2026-10-08T04:41:37.465Z",
     "tweet_id": "2108055188913459626",
@@ -59,12 +59,15 @@
     "sources": [
       "https://www.anthropic.com/engineering/april-23-postmortem"
     ],
-    "verification": "Xの送信成功表示と公開本文を確認"
+    "verification": "Xの送信成功表示と公開本文を確認",
+    "deleted_on": "2026-10-08",
+    "deletion_reason": "ユーザーから文体の修正と削除依頼。Xの削除成功表示を確認。",
+    "style_reference": false
   },
   {
     "id": "tweet_2108055190469579207",
     "content": "2/2\nAnthropicの2026年4月の報告では、原因は思考量の既定値変更、思考履歴を消すバグ、回答を短くする指示。APIには影響なし。\n\nこれはOpus 5.5の原因を示す話ではない。\n「劣化した」という体感は調べる価値がある。でも「意図的に弱くした」とは分けて考えたい。\nhttps://www.anthropic.com/engineering/april-23-postmortem",
-    "status": "posted",
+    "status": "deleted",
     "type": "thread",
     "posted_at": "2026-10-08T04:41:37.836Z",
     "tweet_id": "2108055190469579207",
@@ -73,6 +76,9 @@
     "sources": [
       "https://www.anthropic.com/engineering/april-23-postmortem"
     ],
-    "verification": "Xの送信成功表示と公開本文を確認"
+    "verification": "Xの送信成功表示と公開本文を確認",
+    "deleted_on": "2026-10-08",
+    "deletion_reason": "ユーザーから文体の修正と削除依頼。Xの削除成功表示を確認。",
+    "style_reference": false
   }
 ]
