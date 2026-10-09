@@ -80,5 +80,17 @@
     "deleted_on": "2026-10-08",
     "deletion_reason": "ユーザーから文体の修正と削除依頼。Xの削除成功表示を確認。",
     "style_reference": false
+  },
+  {
+    "id": "tweet_2108531549293686891",
+    "content": "案の定dotsもかなり遅くなってきていて、体感5分の1ぐらいの速さになってる感じがする。完了したらラッキーぐらいの期待値でタスクを頼んでる",
+    "status": "posted",
+    "type": "solo",
+    "posted_at": "2026-10-09T21:14:00+09:00",
+    "tweet_id": "2108531549293686891",
+    "url": "https://x.com/wkflstudio/status/2108531549293686891",
+    "verification": "Xの送信成功表示と公開本文を確認",
+    "style_reference": true,
+    "authorship": "ユーザー指定の原文を変更せず投稿"
   }
 ]
