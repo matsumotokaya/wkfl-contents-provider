@@ -709,3 +709,7 @@ headers = {"User-Agent": "Mozilla/5.0 ...Chrome/120..."}  # ブラウザ偽装
 | `personas` | AIエディターのペルソナ・プロンプト定義 |
 | `contents` | 生成記事・SNS投稿のライフサイクル管理（draft→approved→posted） |
 | `logs` | 実行ログ・エラー記録 |
+
+## Conversation Lab（ローカル音声研究）
+
+リアルタイム対談・声の比較からpodcast/YouTubeへの再利用を研究するサブプロジェクト。起動は [conversation-lab/README.md](conversation-lab/README.md)、仕様と開発再開は [引き継ぎ資料](conversation-lab/HANDOFF.md) を参照。公開・認証・自動配信は未実装です。

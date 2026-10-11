@@ -1,3 +1,4 @@
+import { summarizeLive } from './cost.mjs';
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -34,6 +35,7 @@ export class Store {
     if (output.length) this.audio(item, 'generated.wav', wav(Buffer.concat(output), 24000));
     item.status = reason === 'stopped' || reason === 'time-limit' ? 'completed' : 'interrupted';
     item.endReason = reason; item.endedAt = new Date().toISOString();
+    item.costSummary = summarizeLive(item);
     this.save(item);
   }
   list() {

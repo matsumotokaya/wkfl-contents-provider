@@ -11,6 +11,9 @@
 <div class="workbench">
 <aside class="model-list" aria-label="モデル一覧"><p class="eyebrow">MODELS</p><div id="models"></div><p id="models-note" class="note">モデルの接続状態を確認しています。</p><div class="planned"><p class="eyebrow">COMING SOON</p><button disabled>OpenAI Realtime <small>追加予定</small></button><button disabled>OpenAI GPT Live <small>別API・追加予定</small></button><button disabled>ElevenLabs <small>小規模比較・追加予定</small></button><button disabled>Cartesia <small>追加予定</small></button></div></aside>
 <div class="model-workspace">
+<section id="model-pricing" class="panel"><h2>Gemini 3.8 Live の料金</h2><p>Google公式 Standard 有料枠 / USD・100万tokensあたり / 2026-10-11確認</p>
+<table><thead><tr><th>対象</th><th>入力</th><th>出力</th></tr></thead><tbody><tr><td>テキスト</td><td>$0.75</td><td>$4.50</td></tr><tr><td>音声</td><td>$3.00</td><td>$12.00</td></tr><tr><td>画像・動画</td><td>$1.00</td><td>対象外</td></tr></tbody></table>
+<p>例：入力テキスト1,000 + 入力音声1,000 + 出力音声1,000 tokens = $0.01575。これは仮のトークン数による例です。</p><p class="note">計算：tokens × 単価 ÷ 1,000,000。出力料金にはthinkingを含みますが、取得したthinkingのモダリティと重複関係を確認できないため小計への追加は行いません。無料枠・契約・割引・税などは未確認。経過時間は課金音声時間ではありません。</p><a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noopener">公式料金</a> · <a href="https://ai.google.dev/api/live" target="_blank" rel="noopener">使用量の仕様</a></section>
 <section id="tts-panel" class="panel" aria-labelledby="tts-title" hidden><div class="section-head"><span class="number">01</span><div><h2 id="tts-title">短文の声を比べる</h2><p>TTS / 1回ずつ生成・保存</p></div></div>
 <form id="tts-form"><label for="text">共通の日本語短文</label><textarea id="text" rows="5" maxlength="1500" required></textarea>
 <div class="fields"><div><label for="tts-model">TTSモデル</label><select id="tts-model"></select></div><div><label for="tts-voice">TTSの声</label><select id="tts-voice"></select></div></div>
@@ -27,10 +30,14 @@
 <div class="actions"><button id="live-start" class="primary" disabled>会話を開始</button><button id="talk" disabled>話し始める</button><button id="live-stop" disabled>停止・保存</button></div>
 <p id="latency" class="note">遅延：発話終了通知 → 最初の音声受信（サーバー）。実際の再生開始までの時間ではありません。</p>
 <div id="transcript" class="transcript" aria-live="polite"><span class="muted">会話の文字起こしがここに表示されます。</span></div>
+<div id="session-summary" aria-live="polite"></div>
 <p class="note">入力とブラウザ再生音を同じ時間軸で録音し、無音を保った別WAVとミックスを保存。未再生の受信音は原音として分離します。物理スピーカーの録音ではありません。</p>
 </section>
+<section id="model-specs" class="panel"><h2>Gemini 3.8 Live の仕様</h2><p>確認日：2026-10-11。提供条件・モデル名は変更される可能性があります。</p>
+<dl><dt>モデル / 接続</dt><dd>gemini-3.8-live / v1beta WebSocket / サーバー経由</dd><dt>日本語・入出力</dt><dd>日本語対応。モデルはテキスト・音声・画像・動画入力に対応。本アプリは音声入力と指示テキスト、音声応答と文字起こしを使用。応答モダリティはAUDIO。</dd><dt>音声形式</dt><dd>PCM 16bit little-endian mono。入力16 kHz・モデル出力24 kHz。本アプリの会話録音は共通16 kHz。</dd><dt>声</dt><dd>Kore / Puck / Charon / Aoede を選択可能な候補として登録。全声・日本語品質の実機確認は未完。</dd><dt>発話・割込み</dt><dd>自動VAD（本アプリの無音閾値700ms）、または手動区切り。割込み通知で再生を停止。Gemini 3.8 Liveのproactive audioは常時有効。</dd><dt>コンテキスト</dt><dd>入力131,072 / 出力65,536 tokens。モデルの仕様上限であり、アプリの利用保証ではありません。</dd><dt>時間制限</dt><dd>公式：圧縮なし音声のみ15分、音声＋動画2分。接続は約10分。本アプリ：既定60秒、最大180秒。圧縮・再開・自動再接続は未実装。</dd><dt>現在の対象外</dt><dd>動画、ツール、Search grounding、声の複製、公開閲覧・認証。thinking設定は送信しません。</dd></dl>
+<p><a href="https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live" target="_blank" rel="noopener">モデル仕様</a> · <a href="https://ai.google.dev/gemini-api/docs/live-api/capabilities" target="_blank" rel="noopener">音声・言語・VAD</a> · <a href="https://ai.google.dev/gemini-api/docs/live-api/session-management" target="_blank" rel="noopener">セッション制約</a></p></section>
 </div></div>
-<section class="archive" aria-labelledby="archive-title"><div class="archive-head"><div><p class="eyebrow">EXPERIMENT ARCHIVE</p><h2 id="archive-title">このモデルの履歴</h2></div><button id="refresh">一覧を更新</button></div><p class="note">再生は保存済みファイルのみ。APIを呼びません。費用は算出せず、取得できた使用量を詳細に記録します。</p><div id="experiments"><p class="empty">実験一覧を読み込んでいます。</p></div></section>
+<section class="archive" aria-labelledby="archive-title"><div class="archive-head"><div><p class="eyebrow">EXPERIMENT ARCHIVE</p><h2 id="archive-title">このモデルの履歴</h2></div><button id="refresh">一覧を更新</button></div><p class="note">再生は保存済みファイルのみ。APIを呼びません。Gemini 3.8 Liveは取得済み内訳の概算を表示。セッション総額は最終使用量と集計範囲が不明なため未確定です。</p><div id="experiments"><p class="empty">実験一覧を読み込んでいます。</p></div></section>
 <footer><span id="credentials"></span><span>Googleから開始 / OpenAI・ElevenLabsは今後の研究対象</span></footer>
 </main></div><script type="module" src="/app.js"></script>
 </body></html>

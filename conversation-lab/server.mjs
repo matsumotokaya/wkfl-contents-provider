@@ -78,6 +78,7 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
         res.setHeader('Content-Type', audio[2].endsWith('.wav') ? 'audio/wav' : 'application/json');
         res.end(readFileSync(path)); return;
       }
+      if (req.method === 'GET' && pathname === '/cost.mjs') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end(readFileSync(join(root, 'lib/cost.mjs'))); return; }
       const files = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript'], '/audio-worklet.js': ['audio-worklet.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
       if (req.method === 'GET' && files[pathname]) {
         res.setHeader('Content-Type', files[pathname][1]); res.end(readFileSync(join(root, 'public', files[pathname][0]))); return;

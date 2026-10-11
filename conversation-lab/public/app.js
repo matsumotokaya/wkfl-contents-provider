@@ -1,3 +1,4 @@
+import { summarizeLive } from '/cost.mjs';
 const $ = id => document.getElementById(id);
 let selectedKind = 'live', selectedModel = 'gemini-3.8-live';
 let cfg, busy = false, socket, context, stream, capture, source, playbackBus;
@@ -52,9 +53,29 @@ function flushRecording() {
   } else { cleanup(); send({ type: 'stop' }); }
   controls();
 }
+const usd = value => value === null ? '不明' : `$${value.toFixed(8)}`;
+function costView(item) {
+  const box = document.createElement('div'); box.className = 'cost-summary';
+  const summary = item.costSummary || summarizeLive(item);
+  if (!summary) return box;
+  const p = text => { const node = document.createElement('p'); node.textContent = text; box.append(node); };
+  p(`セッション経過 ${summary.elapsedSeconds ?? '未取得'} 秒 / 録音 ${summary.recordingSeconds ?? '未取得'} 秒`);
+  p('セッション全体の概算：不明（最終使用量・通知の集計範囲を未確認）。請求額ではありません。');
+  for (const observation of summary.observations) {
+    p(`使用量通知 ${observation.atMs === null ? '時刻不明' : (observation.atMs / 1000) + '秒時点'}：取得済み内訳の小計 ${usd(observation.knownDetailsUsd)} USD`);
+    p(observation.lines.map(line => `${line.direction === 'input' ? '入力' : '出力'} ${line.modality}：${line.tokens ?? '未取得'} tokens / ${usd(line.usd)}`).join(' · ') || 'モダリティ別トークン：未取得');
+    p(`入力合計 ${observation.promptTokens ?? '未取得'} / 出力合計 ${observation.responseTokens ?? '未取得'} / thinking ${observation.thoughtsTokens ?? '未取得'} tokens。内訳との差：入力 ${observation.inputUnclassified ?? '不明'} / 出力 ${observation.outputUnclassified ?? '不明'}。差分・thinkingの追加料金は未算入。`);
+  }
+  if (!summary.observations.length) p('API使用量は未取得です。0 USDとは扱いません。');
+  p(`通知は合算しません。終了時点までの利用を網羅する保証はありません。経過秒数から課金音声秒数は推定しません。単価確認 ${summary.pricing.checkedAt} / USD / 100万tokens。計算式：各内訳tokens × 単価 ÷ 1,000,000。`);
+  const link = document.createElement('a'); link.href = summary.pricing.source; link.textContent = '概算に使用したGoogle公式料金'; link.target = '_blank'; link.rel = 'noopener'; box.append(link);
+  return box;
+}
+
 function selectModel(kind, model) {
   if (busy) return;
   selectedKind = kind; selectedModel = model;
+  $('model-pricing').hidden = $('model-specs').hidden = model !== 'gemini-3.8-live';
   $('tts-panel').hidden = kind !== 'tts'; $('live-panel').hidden = kind !== 'live';
   $(`${kind}-model`).value = model;
   for (const button of document.querySelectorAll('#models button')) { button.classList.toggle('selected', button.dataset.model === model); button.setAttribute('aria-pressed', String(button.dataset.model === model)); }
@@ -71,8 +92,9 @@ async function refresh() {
     const model = document.createElement('p'); model.textContent = item.model;
     const meta = document.createElement('p'); meta.className = 'meta'; meta.textContent = `${new Date(item.createdAt).toLocaleString('ja-JP')} · ${item.status}`;
     const condition = document.createElement('p'); condition.textContent = item.condition;
-    const cost = document.createElement('p'); cost.textContent = item.mock ? '合成テスト音・課金なし・実測比較対象外' : `費用未算出 / API使用量 ${item.usage?.length ? '取得あり（詳細）' : '未取得'}`;
-    info.append(h, model, meta, condition, cost);
+    const cost = document.createElement('p'); cost.textContent = item.mock ? '合成テスト音・課金なし・実測比較対象外' : `セッション総額未確定 / API使用量 ${item.usage?.length ? '取得あり（詳細）' : '未取得'}`;
+    info.append(h, model, meta, condition, cost, costView(item));
+    if (item.kind === 'live') { const log = document.createElement('details'), title = document.createElement('summary'); title.textContent = '保存済み対話ログ'; log.append(title); for (const event of item.events || []) { if (event.type === 'transcript') { const line = document.createElement('p'); line.textContent = `${event.role === 'user' ? '自分' : 'モデル'}：${event.text}`; log.append(line); } } media.append(log); }
     if (item.kind === 'live') { const recording = document.createElement('p'); recording.textContent = item.recording?.schema === 'browser-render-timeline-v1' ? item.recording.complete ? '時間軸を保持した録音 / ブラウザ描画音' : '録音は一部欠損・終了フラッシュ未確認。詳細を確認してください。' : '旧形式：無音を詰めた非同期録音'; info.append(recording); }
     if (item.text) { const text = document.createElement('p'); text.textContent = item.text; media.append(text); }
     for (const file of item.files) {
@@ -132,7 +154,7 @@ $('live-start').onclick = async () => {
       const message = JSON.parse(data);
       if (message.type === 'ready') {
         capture.port.postMessage('record');
-        liveReady = true; deadline = Date.now() + message.seconds * 1000; $('transcript').replaceChildren();
+        liveReady = true; deadline = Date.now() + message.seconds * 1000; $('transcript').replaceChildren(); $('session-summary').replaceChildren();
         countdownTimer = setInterval(() => { $('countdown').textContent = Math.max(0, Math.ceil((deadline - Date.now()) / 1000)); }, 250);
         if (!cfg.mock && $('turn-mode').value === 'automatic') { capture.port.postMessage('start'); $('talk').textContent = 'マイク送信中'; }
         $('latency').textContent = cfg.mock ? 'デモ用のタイマーです。AIは応答しません。音声会話や応答速度の測定はできません。' : $('turn-mode').value === 'automatic' ? '自然会話：音声の区切りはサーバーが検出します。発話終了から実再生までの遅延は未計測です。' : '手動区切り：発話終了通知 → 最初の音声受信（サーバー）を計測します。';
@@ -144,7 +166,7 @@ $('live-start').onclick = async () => {
       if (message.type === 'transcript') { const p = document.createElement('p'); p.textContent = `${message.role === 'user' ? '自分' : 'モデル'}：${message.text}`; $('transcript').append(p); $('transcript').scrollTop = $('transcript').scrollHeight; }
       if (message.type === 'metric') $('latency').textContent = `${cfg.mock ? 'MOCK / ' : ''}発話終了通知 → 最初の音声受信（サーバー）：${message.metric.value} ms。実再生開始の遅延ではありません。`;
       if (message.type === 'error') status(message.message, true);
-      if (message.type === 'saved') { status(`録音を保存しました（${message.item.endReason}）。`); refresh().catch(error => status(error.message, true)); }
+      if (message.type === 'saved') { $('session-summary').replaceChildren(costView(message.item)); status(`録音を保存しました（${message.item.endReason}）。`); refresh().catch(error => status(error.message, true)); }
     };
     socket.onerror = () => status('接続できませんでした。設定を確認し、必要なら手動で再開してください。', true);
     socket.onclose = () => { cleanup(); socket = null; busy = false; stopping = false; controls(); };
