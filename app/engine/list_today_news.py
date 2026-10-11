@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from anthropic import Anthropic
 
 from ingest_rss import load_profile, DEFAULT_PROFILE
+from wkfl_credentials import load_wkfl_keys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
@@ -42,14 +43,8 @@ def generate_ai_summary(titles):
     if not titles or len(titles) == 0:
         return None
 
-    # Load API key from .env
-    env_path = os.path.join(BASE_DIR, "..", "..", ".env")
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                if line.startswith("ANTHROPIC_API_KEY="):
-                    api_key = line.split("=", 1)[1].strip()
-                    os.environ["ANTHROPIC_API_KEY"] = api_key
+    # Keys come from ~/.secrets/wkfl (an already-set environment variable wins).
+    load_wkfl_keys()
 
     try:
         client = Anthropic()

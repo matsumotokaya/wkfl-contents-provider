@@ -463,19 +463,15 @@ python-dotenv>=1.0.0
 
 ### 環境変数
 
-`.env.example` をコピーして `.env` を作成:
-```bash
-cp .env.example .env
-```
+APIキーはリポジトリに置かない。ホームの `~/.secrets/wkfl/` に1キー1ファイル（権限600）で置く:
 
-`.env` の内容:
-```
-OPENAI_API_KEY=sk-proj-xxxxx
-ANTHROPIC_API_KEY=sk-ant-xxxxx
-WKFL_MODEL=gpt-5.4
-```
+| ファイル | 使う側 |
+|---|---|
+| `~/.secrets/wkfl/anthropic-token` | 記事生成・ニュース要約（`app/engine/wkfl_credentials.py` が読む） |
+| `~/.secrets/wkfl/openai-token` | 記事生成（GPT系）・Conversation Lab の OpenAI Realtime |
+| `~/.secrets/wkfl/gemini-token` | TTS Studio・Conversation Lab（`tools/credentials.mjs` が読む） |
 
-`.env` は `.gitignore` に含まれており、Gitにはコミットされない。
+すでに環境変数が設定されていればそちらが優先される（GitHub Actions はシークレットを環境変数で渡す）。キーごとのアカウント・プロジェクトの対応は `~/playbooks/gemini-tts.md` と `~/playbooks/openai-api-keys.md`。`.env` には秘密でない設定（`WKFL_MODEL` など）だけを書く（`.env.example` 参照、Git対象外）。
 
 ---
 

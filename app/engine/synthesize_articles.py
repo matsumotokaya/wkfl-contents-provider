@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from wkfl_credentials import load_wkfl_keys
 
 from wkfl_pipeline import (
     FACT_MAX_TOKENS,
@@ -29,6 +30,7 @@ from wkfl_pipeline import (
 # --- LOAD .env ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+load_wkfl_keys()
 
 # --- PATH CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
