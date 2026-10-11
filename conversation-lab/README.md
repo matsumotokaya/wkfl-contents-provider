@@ -13,7 +13,7 @@ cd /Users/kaya.matsumoto/projects/WKFL/conversation-lab
 npm run mock
 ```
 
-画面: http://127.0.0.1:8788 。モックは外部通信・資格情報読み取り・マイクを使いません。出力は合成テスト音で、実際の声・会話・遅延の評価対象ではありません。
+画面: http://127.0.0.1:8788 。モックは外部API・資格情報読み取り・マイクを使いません（声カードの「英語デモ」を押したときだけ、ブラウザがGoogle Cloud資料の公開音声を読み込みます）。出力は合成テスト音で、実際の声・会話・遅延の評価対象ではありません。
 
 実際のAPIを使う場合は、人間がモックを終了して `npm start`。起動・ページ表示・履歴再生だけではAPIを呼びません。「1回生成」または「会話を開始」の明示操作から課金対象になります。既存のキーを参照し、新しい `.env` は作りません。参照順と移行計画は [CREDENTIALS.md](CREDENTIALS.md)。
 
@@ -23,11 +23,12 @@ npm run mock
 - Gemini 3.8 Live: 自然会話を既定とし、サーバーVADで発話を検出。開始後マイクを送り、音声応答を再生。割り込み時は再生キューを破棄。
 - 手動区切りモード: 「話し始める」→「発話を送る」で区切り、終了通知から最初の音声受信までを測定。
 - Liveは既定60秒・最大180秒、明示停止、タブ切断／接続失敗時に切断。自動再接続・自動再試行はありません。
-- 選択モデルごとの日時・声・条件・録音・文字起こし・API使用量の履歴。OpenAI Realtime / GPT Live / ElevenLabs / Cartesiaは無効な「追加予定」のみ。
+- 声カタログ: 公式プリセット30声をカードで一覧表示。日本語デモ（`npm run voice-demos`。既定は計画表示のみ、`--execute` で1声1回のTTS課金）と英語デモ（Google Cloud資料）を再生できる。各カードの「</> コード」から、AIへの指示・Live API setup・TTSリクエストのJSONをコピーできる。
+- OpenAI Realtime（gpt-realtime-2.1 / mini）: Gemini Liveと同じ画面・録音・料金表示で会話できる。
+- OpenAI GPT-Live（gpt-live-1）: 会話は gpt-live-1、深い推論は委任先（gpt-6-luna / gpt-6-sol）が担当。全二重のため自然会話のみ。料金は音声の秒数＋委任先のトークン。キーは `~/.secrets/wkfl/openai-token`。RealtimeとGPT-Liveの違いは画面の説明パネル。
+- 選択モデルごとの日時・声・条件・録音・文字起こし・API使用量と概算料金（USD・円）の履歴。モデルごとに新しい5件だけ残し、古いものはmacOSのゴミ箱へ移す。ElevenLabs / Cartesiaは無効な「追加予定」のみ。
 
-ユーザーは実会話を試したと申告し、保存済み履歴もあります。品質・全機能成功の確認とは区別します。
-
-**エージェントによるLive検証はユーザー承認の1回で接続・setup・初回音声チャンク2バイトの受信まで確認済みです。完全な音声応答、マイク会話、各声の利用可否、日本語品質、自然会話の割り込みは未検証です。** 公式仕様に基づく接続実装とモック検証までを行っています。モデルのアクセス権や実利用可否を保証しません。
+Gemini Live・OpenAI Realtime・GPT-Live は、2026-10-11〜12 にユーザーの実会話で動作を確認しました。全声の日本語品質や自然な割り込みの評価はまだです。確認状態の詳細は [HANDOFF.md](HANDOFF.md#確認状態と次の順序2026-10-12)。
 
 ## 保存形式と限界
 
@@ -53,7 +54,7 @@ TTSは `request_to_complete_wav_ms`（サーバー処理開始→全WAV受信）
 
 ## 人間による実API試験
 
-実API試験は人間が行います。AIは都度の具体承認なしに、無料枠でも外部API試験を行いません。今回の例外は2026-10-11に承認されたLive接続1回のみで、実施済みです。初回の試験前に、選択モデルの現行料金・回数・時間上限・概算費用を別途確認してください。最小候補は **TTSの共通短文1回、Live 30秒1セッション**。これは試験実行の承認ではありません。
+会話は人間が画面の「会話を開始」で行います。AIが課金を伴う生成（日本語デモなど）をするのは、ユーザーが依頼した範囲だけです。デモ生成は `npm run voice-demos` が既定で計画と概算だけを表示し、`--execute` を付けたときだけ実行します。料金の確認できない一覧取得（Geminiの声一覧、OpenAIのモデル一覧）は課金されません。
 
 一括全声生成、ロード時の自動生成、生成ボタンの連打、自動retryはありません。同時実行はサーバー全体で1件です。TTSは90秒で中止しますが、中止前に実行された生成の課金取り消しを保証しません。Liveも料金上限を金額で保証する仕組みではなく、時間制限です。
 
@@ -68,7 +69,7 @@ npm test
 
 ## 接続の境界
 
-サーバーは127.0.0.1にのみbind。Host・Origin・Fetch Metadata・メモリ上のリクエストトークンを検査し、WebSocketのupgradeでもOriginとトークンを検査します。Googleへの接続はサーバープロキシで、ブラウザに長期キーを渡しません。公開ホスティング・ユーザー認証・公開ストレージは未実装です。
+サーバーは127.0.0.1にのみbind。Host・Origin・Fetch Metadata・メモリ上のリクエストトークンを検査し、WebSocketのupgradeでもOriginとトークンを検査します。ページ自体の表示（トップレベルのGETナビゲーション）だけは別サイト起点でも許可します（ブラウザ自動操作で画面を確認するため。2026-10-11ユーザー承認）。API読み取り・生成・会話開始の検査は変えていません。Googleへの接続はサーバープロキシで、ブラウザに長期キーを渡しません。公開ホスティング・ユーザー認証・公開ストレージは未実装です。
 
 `lib/google.mjs` がベンダー接続、`lib/catalog.mjs` がTTS/Live別のモデル・声カタログ、`../tools/credentials.mjs` が旧TTS Studioと共通のWKFL専用資格情報参照（`lib/credentials.mjs`から再export）、`lib/store.mjs` が保存境界です。声リストは別々に保持し、名称の一致を音質の同一性とは扱いません。Grounding・ツール呼び出し・声の複製は無効／未実装です。
 
@@ -77,12 +78,12 @@ npm test
 - [モデル一覧](https://ai.google.dev/gemini-api/docs/models): 通常推論 `gemini-3.8-flash` はこのアプリの音声モデル一覧に含めない。
 - [TTS](https://ai.google.dev/gemini-api/docs/speech-generation): 3.8はREST Interactions API、本文と `speech_metadata.style` を分離。旧StudioのgenerateContent形式を流用しない。
 - [Live WebSocket](https://ai.google.dev/gemini-api/docs/live-api/get-started-websocket) / [APIリファレンス](https://ai.google.dev/api/live): WSSはv1beta、音声は入力16 kHz／出力24 kHz。
-- [Live capabilities](https://ai.google.dev/gemini-api/docs/live-api/capabilities): 声の対応と自動VAD。声候補Kore/Puck/Charon/AoedeをTTSとは別設定にする。
+- [Live capabilities](https://ai.google.dev/gemini-api/docs/live-api/capabilities): 声の対応と自動VAD。native audio出力モデルはTTSの全プリセット声（30種）に対応。声リストはTTSとは別設定にする。性別は[Google Cloud Gemini-TTS資料](https://docs.cloud.google.com/text-to-speech/docs/gemini-tts)の表による。
 
 研究の次段: OpenAI RealtimeとGPT Liveは別方式として比較。ElevenLabsは少量、Cartesiaは候補。各社の価格やモデルIDは接続追加時に公式資料を再確認する。公開する場合は自作台本・AI生成・事前録音を明示し、承認済みファイルだけを書き出す。
 
 ## 今回の検証記録
 
-JS構文検査と、外部fetch/TLSを禁止したモックと料金計算のテストを確認。通常の自動検証は課金API・マイクを使いません。別途ユーザー承認のLive接続1回のみ実施し、マイクは未使用です。ブラウザによる画面確認は、実行環境のChrome接続がlocalhostを `ERR_BLOCKED_BY_CLIENT` で拒否したため未完です。PC上の通常ブラウザでモック画面を開くことが次の確認になります。
+`npm run lint` と `npm test`（51件）は、外部fetch/TLSを禁止し、課金APIやマイクを使いません。エージェントの自動ブラウザ（Claude in Chrome）からもページを読めます（トップレベルの表示だけ許可。API・生成・会話の検査は不変）。見た目の確認はユーザーが行い、エージェントはスクリーンショットを頼まれたときだけ撮ります。
 
 現在の稼働モードは `/health` の `mock` で確認できます。実接続モードでは起動・ページ表示だけでは生成せず、「会話を開始」または単発生成の操作から課金対象です。既定60秒は選択済みのセッション時間で、設定できる最大値は180秒です。

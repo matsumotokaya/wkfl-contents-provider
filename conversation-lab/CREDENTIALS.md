@@ -2,7 +2,7 @@
 
 この文書が答える問い: 旧TTS StudioとConversation Labはどのキーを使うか／何を中央化するか／実体をどう移行するか。
 
-確認日: 2026-10-11。
+確認日: 2026-10-11。マシン全体の Gemini キーの対応表（AI Studio名・プロジェクト・有料/無料）は `~/playbooks/gemini-tts.md`「キーの使い分け」が正本。
 
 **更新：具体承認に基づき、WKFL専用キーの中央保存を実施済み。ディレクトリ700・ファイル600。旧`.env`は両方保持。両アプリが同じ中央キーを参照することを値を表示せず確認した。**
 ユーザー確認済み: 既存キーはWKFL専用として発行され、旧TTS Studioと新Conversation Labで同じキーを使う。中央管理は保存場所をホームへ統一する意味で、他プロジェクトとのキー共用ではない。
@@ -30,7 +30,9 @@
 | `/Users/kaya.matsumoto/projects/WKFL/tts-studio/.env` | あり | `GEMINI_API_KEY`あり |
 | `/Users/kaya.matsumoto/projects/WKFL/.env` | あり | `GEMINI_API_KEY`あり |
 
-移行前の調査では存在と変数名だけを確認した。その後、具体承認で旧TTS側のキーを中央保存した。旧ファイル2つの値の同一性は比較しておらず、値は表示していない。従来のTTSの読み込み順は `tts-studio/.env` が先なので、**中央化する第一候補は `tts-studio/.env` の `GEMINI_API_KEY`**。起動時に明示された環境変数がある場合はそちらが優先されるため、実移行前に利用方法を確認する。
+移行前の調査では存在と変数名だけを確認した。その後、具体承認で旧TTS側のキーを中央保存した。旧ファイル2つの値の同一性は比較しておらず、値は表示していない。
+
+**2026-10-11追記（値は表示せずハッシュで比較）**: 中央保存したキーは `tts-studio/.env` と同一で、`WKFL/.env` のキーとは**別物**。中央のキーで `gemini-3.8-flash-tts` を呼ぶと、Googleは「無料枠（Free Tier）で1日10リクエストまで」と応答した。AI Studioでユーザーが確認：`WKFL/.env` のキーは「news-tts」（Tier 1・前払い）、`tts-studio/.env` のキーは「wkfl-tts-001」（無料枠）。**同日、中央のキーを有料の news-tts に差し替えた**（権限600）。Conversation Labと旧TTS Studioは以後こちらを使う。無料キーは同日、ユーザー承認で `tts-studio/.env` から削除した（無料枠は今後使わない）。`WKFL/.env` には中央と同じ有料キーが残っているが、現行コードは読まない。従来のTTSの読み込み順は `tts-studio/.env` が先なので、**中央化する第一候補は `tts-studio/.env` の `GEMINI_API_KEY`**。起動時に明示された環境変数がある場合はそちらが優先されるため、実移行前に利用方法を確認する。
 
 ## 承認済み操作と実施状況
 
@@ -54,11 +56,12 @@
 
 | サービス・用途 | 現行コードでの参照 | 今回の扱い |
 |---|---|---|
-| OpenAIの記事生成 | `OPENAI_API_KEY`、WKFL `.env`のdotenv読み込み | 変更しない。将来WKFL専用保存へ移す場合は記事生成への影響も確認 |
-| Anthropicの記事生成／要約 | `ANTHROPIC_API_KEY`。`app/engine/list_today_news.py`は独自パースと環境変数上書き | 変更しない。将来のローダー統一対象 |
+| OpenAIの記事生成 | `~/.secrets/wkfl/openai-token` を `app/engine/wkfl_credentials.py` が読む（GitHub Actions はシークレットの環境変数） | ローカルは未配置。Conversation Lab と同じWKFL用キーを使う |
+| Anthropicの記事生成／要約 | `~/.secrets/wkfl/anthropic-token` を `app/engine/wkfl_credentials.py` が読む（環境変数があれば優先） | 2026-10-11 に `WKFL/.env` から移動。`WKFL/.env` にはキーが残っていない |
 | GitHub Actions | GitHub SecretsのOpenAI／Anthropic | ローカル移行と別管理。変更しない |
 | Render旧Web | `render.yaml`の`ANTHROPIC_API_KEY`、`sync:false` | 設定のみ確認済み。変更しない |
 | fal画像生成 | `FAL_KEY` または `~/.secrets/fal-token` | ホーム参照を維持。新Labから読まない |
+| OpenAI Realtime（Conversation Lab） | `~/.secrets/wkfl/openai-token` または絶対パスの `OPENAI_API_KEY_FILE` のみ（`tools/credentials.mjs` の `loadOpenAIKey`）。一般の `OPENAI_API_KEY` は無視 | 2026-10-11 にWKFL用キー（末尾 `…UxoA`）を新規発行して配置（600）。モデル一覧の取得で gpt-realtime-2.1 / mini / gpt-4o-mini-transcribe の利用可を確認。既存の wkfl-ai-news（`…gMoA`）はGitHub Actionsのシークレットにだけあり取り出せない。対応表は `~/playbooks/openai-api-keys.md` |
 | ElevenLabs／Cartesia | 新Labには接続・資格情報実装なし | キー登録・保存先作成をしない |
 
 コード上の出所: `tools/credentials.mjs`、`tts-studio/lib/pipeline.mjs`、`tts-studio/server.mjs`、`conversation-lab/lib/credentials.mjs`、`app/engine/synthesize_*.py`、`app/engine/wkfl_pipeline.py`、`.github/workflows/daily_wkfl_briefing.yml`、`tools/image_fal.py`。

@@ -50,6 +50,10 @@ test('Host, Origin, CSRF and cross-site GET are rejected before generation', asy
   const f = await fixture(t);
   assert.equal((await request(f.url, '/api/config', { headers: { Host: 'evil.test' } })).status, 403);
   assert.equal((await request(f.url, '/api/config', { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
+  const navigate = { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+  assert.equal((await request(f.url, '/', { headers: navigate })).status, 200);
+  assert.equal((await request(f.url, '/api/config', { headers: { ...navigate, 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty' } })).status, 403);
+  assert.equal((await request(f.url, '/api/tts', { method: 'POST', headers: { ...f.headers, ...navigate, Origin: 'https://evil.test' }, body: settings })).status, 403);
   assert.equal((await request(f.url, '/api/tts', { method: 'POST', headers: { ...f.headers, Origin: 'https://evil.test' }, body: settings })).status, 403);
   assert.equal((await request(f.url, '/api/tts', { method: 'POST', headers: { ...f.headers, 'X-Lab-Token': 'wrong' }, body: settings })).status, 403);
   assert.deepEqual(f.lab.store.list(), []);
@@ -85,6 +89,42 @@ test('automatic mode accepts continuous input and stops at the server time limit
   ws.send(JSON.stringify({ type: 'audio', data: Buffer.alloc(3200).toString('base64') }));
   ws.send(JSON.stringify({ type: 'mockTurn' })); await next('audio');
   const { item } = await next('saved'); assert.equal(item.endReason, 'time-limit'); assert.equal(item.metrics.length, 0); ws.terminate();
+});
+test('a closed provider connection is recorded and not blamed on the browser', async t => {
+  const provider = { synthesize, connectLive: (_settings, callbacks) => { setTimeout(() => callbacks.ready(), 5); return { send(message) { if (message.realtimeInput?.audio) throw Object.assign(new Error('Live connection not open (state 2)'), { upstream: true }); }, close() {} }; } };
+  const f = await fixture(t, { provider }); const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
+  ws.send(JSON.stringify({ ...start, mode: 'automatic' })); await next('ready');
+  ws.send(JSON.stringify({ type: 'audio', data: Buffer.alloc(3200).toString('base64') }));
+  const { item } = await next('saved');
+  assert.equal(item.endReason, 'provider-unavailable');
+  const error = item.events.find(e => e.type === 'server-error');
+  assert.equal(error.messageType, 'audio'); assert.match(error.error, /not open/);
+  ws.terminate();
+});
+test('provider close code and reason are kept for diagnosis', async t => {
+  let callbacks;
+  const provider = { synthesize, connectLive: (_settings, cb) => { callbacks = cb; setTimeout(() => cb.ready(), 5); return { send() {}, close() {} }; } };
+  const f = await fixture(t, { provider }); const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
+  ws.send(JSON.stringify({ ...start, mode: 'automatic' })); await next('ready');
+  callbacks.close({ code: 1011, reason: 'Internal error' });
+  const { item } = await next('saved');
+  assert.equal(item.endReason, 'provider-closed');
+  const closeEvent = item.events.find(e => e.type === 'provider-close');
+  assert.equal(closeEvent.code, 1011); assert.equal(closeEvent.reason, 'Internal error');
+  ws.terminate();
+});
+test('usage that arrives after the session was saved updates the saved record', async t => {
+  let callbacks;
+  const provider = { synthesize, connectLive: (_settings, cb) => { callbacks = cb; setTimeout(() => cb.ready(), 5); return { send() {}, close() {} }; } };
+  const f = await fixture(t, { provider }); const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
+  ws.send(JSON.stringify({ ...start, mode: 'automatic' })); const ready = await next('ready');
+  ws.send(JSON.stringify({ type: 'stop' })); await next('saved');
+  callbacks.message({ providerUsage: { source: 'openai-live-voice', value: { seconds: 7, final: true } } });
+  callbacks.message({ serverContent: { outputTranscription: { text: 'ignored after save' } } });
+  const saved = JSON.parse(readFileSync(join(f.dir, ready.id, 'metadata.json'), 'utf8'));
+  assert.equal(saved.usage.length, 1); assert.deepEqual(saved.usage[0].value, { seconds: 7, final: true }); assert.equal(saved.usage[0].afterSave, true);
+  assert.equal(saved.events.filter(e => e.type === 'transcript').length, 0);
+  ws.terminate();
 });
 test('WebSocket rejects cross-origin and wrong token handshakes', async t => {
   const f = await fixture(t);

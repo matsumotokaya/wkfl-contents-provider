@@ -38,6 +38,20 @@ export class Store {
     item.costSummary = summarizeLive(item);
     this.save(item);
   }
+  // Keeps the newest `keep` items per model. Older ones move to `trashDir` (recoverable), never hard-deleted.
+  // Running items are never moved.
+  prune(keep, trashDir) {
+    if (!keep || !trashDir) return [];
+    const moved = [], seen = new Map();
+    for (const item of this.list()) {
+      const n = (seen.get(item.model) || 0) + 1; seen.set(item.model, n);
+      if (n <= keep || item.status === 'running') continue;
+      mkdirSync(trashDir, { recursive: true });
+      renameSync(join(this.root, item.id), join(trashDir, `conversation-lab-${item.id}`));
+      moved.push(item.id);
+    }
+    return moved;
+  }
   list() {
     return readdirSync(this.root).filter(id => /^[a-f0-9-]{36}$/.test(id)).flatMap(id => {
       try { return [JSON.parse(readFileSync(join(this.root, id, 'metadata.json'), 'utf8'))]; } catch { return []; }

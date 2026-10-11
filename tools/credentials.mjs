@@ -1,4 +1,5 @@
 // Shared by WKFL TTS Studio and Conversation Lab. Resolve one provider only.
+// Which AI Studio / OpenAI project each key belongs to: ~/playbooks/gemini-tts.md and conversation-lab/CREDENTIALS.md.
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, isAbsolute, dirname } from 'node:path';
@@ -39,4 +40,24 @@ export function loadGoogleKey({ env = process.env, home = homedir(), repoRoot = 
     if (value) return value;
   }
   throw new Error('WKFL Google credential is not configured');
+}
+
+// OpenAI (Conversation Lab Realtime). Only an explicit file or the central WKFL file: the plain
+// OPENAI_API_KEY variable is ignored because other projects on this machine use their own keys.
+export function openaiCredentialSource({ env = process.env, home = homedir() } = {}) {
+  if (env.OPENAI_API_KEY_FILE) {
+    if (!isAbsolute(env.OPENAI_API_KEY_FILE)) throw new Error('OPENAI_API_KEY_FILE must be absolute');
+    return { type: 'explicit-file', path: env.OPENAI_API_KEY_FILE };
+  }
+  const canonical = join(home, '.secrets', 'wkfl', 'openai-token');
+  if (existsSync(canonical)) return { type: 'wkfl-home-secret', path: canonical };
+  return { type: 'missing' };
+}
+export function loadOpenAIKey({ env = process.env, home = homedir(), mock = false } = {}) {
+  if (mock) return undefined;
+  const source = openaiCredentialSource({ env, home });
+  if (source.type === 'missing') throw new Error('WKFL OpenAI credential is not configured');
+  const value = readFileSync(source.path, 'utf8').trim();
+  if (!value) throw new Error('Empty credential file');
+  return value;
 }

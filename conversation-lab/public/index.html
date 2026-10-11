@@ -1,38 +1,48 @@
 <!doctype html>
 <html lang="ja">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WKFL Conversation Lab</title><link rel="stylesheet" href="/style.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conversation Lab</title><link rel="stylesheet" href="/style.css"></head>
 <body>
 <div class="shell">
-<header><a class="brand" href="/">WKFL <span>CONVERSATION LAB</span></a><span id="mode" class="badge">読み込み中</span></header>
+<header><a class="brand" href="/">CONVERSATION LAB <span>VOICE RESEARCH / LOCAL WORKBENCH</span></a><span id="mode" class="badge">読み込み中</span></header>
 <main>
 <aside id="mode-notice" class="mode-banner" role="note">動作モードを確認しています。まだAIには接続していません。</aside>
-<div class="intro"><p class="eyebrow">VOICE RESEARCH / LOCAL WORKBENCH</p><h1>声を聞く。会話を比べる。</h1><p>同じ短文から始める、日本語の音声研究。試した条件と録音を、このMacに残します。</p></div>
 <p id="status" role="status" aria-live="polite">準備中…</p>
 <div class="workbench">
-<aside class="model-list" aria-label="モデル一覧"><p class="eyebrow">MODELS</p><div id="models"></div><p id="models-note" class="note">モデルの接続状態を確認しています。</p><div class="planned"><p class="eyebrow">COMING SOON</p><button disabled>OpenAI Realtime <small>追加予定</small></button><button disabled>OpenAI GPT Live <small>別API・追加予定</small></button><button disabled>ElevenLabs <small>小規模比較・追加予定</small></button><button disabled>Cartesia <small>追加予定</small></button></div></aside>
+<aside class="model-list" aria-label="モデル一覧"><p class="eyebrow">MODELS</p><div id="models"></div><div class="planned"><p class="eyebrow">COMING SOON</p><button disabled>ElevenLabs <small>小規模比較・追加予定</small></button><button disabled>Cartesia <small>追加予定</small></button></div></aside>
 <div class="model-workspace">
-<section id="model-pricing" class="panel"><h2>Gemini 3.8 Live の料金</h2><p>Google公式 Standard 有料枠 / USD・100万tokensあたり / 2026-10-11確認</p>
-<table><thead><tr><th>対象</th><th>入力</th><th>出力</th></tr></thead><tbody><tr><td>テキスト</td><td>$0.75</td><td>$4.50</td></tr><tr><td>音声</td><td>$3.00</td><td>$12.00</td></tr><tr><td>画像・動画</td><td>$1.00</td><td>対象外</td></tr></tbody></table>
-<p>例：入力テキスト1,000 + 入力音声1,000 + 出力音声1,000 tokens = $0.01575。これは仮のトークン数による例です。</p><p class="note">計算：tokens × 単価 ÷ 1,000,000。出力料金にはthinkingを含みますが、取得したthinkingのモダリティと重複関係を確認できないため小計への追加は行いません。無料枠・契約・割引・税などは未確認。経過時間は課金音声時間ではありません。</p><a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noopener">公式料金</a> · <a href="https://ai.google.dev/api/live" target="_blank" rel="noopener">使用量の仕様</a></section>
+<section id="model-pricing" class="panel" aria-labelledby="pricing-title"></section>
 <section id="tts-panel" class="panel" aria-labelledby="tts-title" hidden><div class="section-head"><span class="number">01</span><div><h2 id="tts-title">短文の声を比べる</h2><p>TTS / 1回ずつ生成・保存</p></div></div>
 <form id="tts-form"><label for="text">共通の日本語短文</label><textarea id="text" rows="5" maxlength="1500" required></textarea>
-<div class="fields"><div><label for="tts-model">TTSモデル</label><select id="tts-model"></select></div><div><label for="tts-voice">TTSの声</label><select id="tts-voice"></select></div></div>
+<label for="tts-model">TTSモデル</label><select id="tts-model"></select>
+<fieldset id="tts-voice" class="voice-catalog"><legend>TTSの声 <span id="tts-voice-selected" class="selected-voice" aria-live="polite"></span></legend><p class="note voice-guide"></p><div id="tts-voice-cards"></div></fieldset>
 <label for="tts-condition">読み方・比較条件</label><input id="tts-condition" maxlength="1000" value="自然な日本語で、落ち着いて明瞭に読む。">
 <p id="tts-note" class="note"></p><p class="notice api-notice">1回の生成でAPI料金が発生します。料金・品質は未検証です。</p>
 <div class="actions"><button id="generate" type="submit" class="primary" disabled>この条件で1回生成・保存</button><button id="tts-stop" type="button" disabled>生成を停止</button></div></form>
 </section>
 <section id="live-panel" class="panel" aria-labelledby="live-title"><div class="section-head"><span class="number">02</span><div><h2 id="live-title">声で会話する</h2><p id="live-subtitle">LIVE / 自然な音声対話</p></div></div>
-<div class="fields"><div><label for="live-model">Liveモデル</label><select id="live-model"></select></div><div><label for="live-voice">Liveの声</label><select id="live-voice"></select></div></div>
+<label for="live-model">Liveモデル</label><select id="live-model"></select>
+<fieldset id="live-voice" class="voice-catalog"><legend>Liveの声 <span id="live-voice-selected" class="selected-voice" aria-live="polite"></span></legend><p class="note voice-guide"></p><div id="live-voice-cards"></div></fieldset>
 <label for="live-condition">会話の条件</label><textarea id="live-condition" rows="2" maxlength="1000">音声研究の対話相手として、短い質問を一つずつ返す。</textarea>
+<div id="delegate-field" hidden><label for="live-delegate">考える役（委任先のモデル）</label><select id="live-delegate"></select><p class="note">GPT-Live は会話を受け持ち、考えを深める問いや論点の整理はこのモデルに任せます。委任先の利用料は音声とは別にかかります。</p></div>
 <label for="turn-mode">会話の区切り</label><select id="turn-mode"><option value="automatic">自然会話（音声を自動検出）</option><option value="manual">手動区切り（遅延計測用）</option></select>
 <div class="fields"><div><label id="seconds-label" for="seconds">セッション上限（既定60秒・最大180秒）</label><select id="seconds"><option value="30">30秒</option><option value="60" selected>60秒</option><option value="120">120秒</option><option value="180">180秒</option></select></div><div class="timer"><span id="countdown">—</span><small>残り秒</small></div></div>
 <p id="live-note" class="note"></p><p class="notice api-notice">開始後はAPI料金が発生します。マイク音声をGoogleへ送信します。ヘッドホン推奨。</p>
 <div class="actions"><button id="live-start" class="primary" disabled>会話を開始</button><button id="talk" disabled>話し始める</button><button id="live-stop" disabled>停止・保存</button></div>
 <p id="latency" class="note">遅延：発話終了通知 → 最初の音声受信（サーバー）。実際の再生開始までの時間ではありません。</p>
-<div id="transcript" class="transcript" aria-live="polite"><span class="muted">会話の文字起こしがここに表示されます。</span></div>
+<p id="transcript-label" class="field-label">会話ログ</p>
+<div id="transcript" class="transcript" role="log" aria-labelledby="transcript-label" tabindex="0"><span class="muted">会話の文字起こしがここに表示されます。</span></div>
 <div id="session-summary" aria-live="polite"></div>
 <p class="note">入力とブラウザ再生音を同じ時間軸で録音し、無音を保った別WAVとミックスを保存。未再生の受信音は原音として分離します。物理スピーカーの録音ではありません。</p>
 </section>
+<section id="openai-guide" class="panel" aria-labelledby="openai-guide-title" hidden><h2 id="openai-guide-title">OpenAI の Realtime と GPT-Live の違い</h2><p>どちらも音声をストリーミングして低遅延で会話できますが、役割が違います。このラボではどちらも試せます。GPT-Live では「考える役」を選べます。</p>
+<table class="compare"><thead><tr><th></th><th>Realtime（gpt-realtime-2.1 / mini）</th><th>GPT-Live（gpt-live-1）</th></tr></thead><tbody>
+<tr><th>役割</th><td>音声モデル自身が、聞き取りから考える・話すまでを1つで行う（speech-to-speech）</td><td>会話の進行役。聞きながら話す全二重の会話を受け持ち、調べものやツール実行は裏側のモデル・エージェントに任せる（委任）</td></tr>
+<tr><th>接続</th><td><code>/v1/realtime</code>（WebSocket・WebRTC）</td><td><code>/v1/live/sessions</code>（WebRTC・WebSocket・電話/SIP）</td></tr>
+<tr><th>料金</th><td>トークン課金（100万tokensあたり 2.1：音声入力$32・出力$64／mini：$10・$20）。応答のたびに会話全体が入力として数えられる</td><td>1分$0.05（秒単位）。裏側のモデル・ツールの利用料は別</td></tr>
+<tr><th>声</th><td>10種（marin・cedar が推奨）</td><td>12種（Quartz、Ripple、Vesper など）</td></tr>
+<tr><th>向いている使い方</th><td>音声だけで完結する低遅延の受け答え、音声エージェント</td><td>話しながら裏で検索や作業を進める音声アシスタント</td></tr>
+</tbody></table>
+<p class="note">2026-10-11確認。出典：<a href="https://developers.openai.com/api/docs/guides/realtime-conversations" target="_blank" rel="noopener">Realtime の会話ガイド</a> · <a href="https://developers.openai.com/api/docs/guides/live" target="_blank" rel="noopener">GPT-Live ガイド</a> · <a href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noopener">料金</a> · <a href="https://community.openai.com/t/introducing-gpt-live-1-in-the-api/1396471" target="_blank" rel="noopener">GPT-Live-1 の発表</a></p></section>
 <section id="model-specs" class="panel"><h2>Gemini 3.8 Live の仕様</h2><p>確認日：2026-10-11。提供条件・モデル名は変更される可能性があります。</p>
 <dl><dt>モデル / 接続</dt><dd>gemini-3.8-live / v1beta WebSocket / サーバー経由</dd><dt>日本語・入出力</dt><dd>日本語対応。モデルはテキスト・音声・画像・動画入力に対応。本アプリは音声入力と指示テキスト、音声応答と文字起こしを使用。応答モダリティはAUDIO。</dd><dt>音声形式</dt><dd>PCM 16bit little-endian mono。入力16 kHz・モデル出力24 kHz。本アプリの会話録音は共通16 kHz。</dd><dt>声</dt><dd>Kore / Puck / Charon / Aoede を選択可能な候補として登録。全声・日本語品質の実機確認は未完。</dd><dt>発話・割込み</dt><dd>自動VAD（本アプリの無音閾値700ms）、または手動区切り。割込み通知で再生を停止。Gemini 3.8 Liveのproactive audioは常時有効。</dd><dt>コンテキスト</dt><dd>入力131,072 / 出力65,536 tokens。モデルの仕様上限であり、アプリの利用保証ではありません。</dd><dt>時間制限</dt><dd>公式：圧縮なし音声のみ15分、音声＋動画2分。接続は約10分。本アプリ：既定60秒、最大180秒。圧縮・再開・自動再接続は未実装。</dd><dt>現在の対象外</dt><dd>動画、ツール、Search grounding、声の複製、公開閲覧・認証。thinking設定は送信しません。</dd></dl>
 <p><a href="https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live" target="_blank" rel="noopener">モデル仕様</a> · <a href="https://ai.google.dev/gemini-api/docs/live-api/capabilities" target="_blank" rel="noopener">音声・言語・VAD</a> · <a href="https://ai.google.dev/gemini-api/docs/live-api/session-management" target="_blank" rel="noopener">セッション制約</a></p></section>

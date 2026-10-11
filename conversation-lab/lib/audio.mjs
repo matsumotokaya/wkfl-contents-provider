@@ -17,3 +17,14 @@ export function pcmFromBase64(data) {
   if (!pcm.length || pcm.length % 2 || pcm.toString('base64') !== data) throw new Error('Invalid PCM');
   return pcm;
 }
+// Browser capture runs at 16 kHz (shared with Gemini); OpenAI Realtime takes 24 kHz PCM16.
+// Linear interpolation is enough for speech input.
+export function upsample16kTo24k(pcm) {
+  const input = pcm.length / 2, frames = Math.floor(input * 3 / 2), out = Buffer.alloc(frames * 2);
+  for (let i = 0; i < frames; i++) {
+    const position = i * 2 / 3, index = Math.floor(position), fraction = position - index;
+    const a = pcm.readInt16LE(Math.min(index, input - 1) * 2), b = pcm.readInt16LE(Math.min(index + 1, input - 1) * 2);
+    out.writeInt16LE(Math.round(a + (b - a) * fraction), i * 2);
+  }
+  return out;
+}
