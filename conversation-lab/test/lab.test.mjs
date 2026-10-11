@@ -203,3 +203,29 @@ test('health and recording drain are local only; server keeps received audio sep
   assert.equal((await request(f.url, `/experiments/${item.id}/mix.wav`)).status, 200);
   ws.terminate();
 });
+test('recording bookkeeping problems are logged and never end the session', async t => {
+  const f = await fixture(t);
+  const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
+  ws.send(JSON.stringify({ ...start, mode: 'automatic' })); await next('ready');
+  ws.send(JSON.stringify({ type: 'recordingStarted', frameOrigin: 16000 }));
+  const silence = Buffer.alloc(3200).toString('base64');
+  const chunk = startFrame => ws.send(JSON.stringify({ type: 'recordingChunk', startFrame, input: silence, playback: silence }));
+  chunk(0); chunk(1600);
+  chunk(1472); // overlaps audio already placed (a stale browser clock): dropped, not fatal
+  ws.send(JSON.stringify({ type: 'recordingDrift', frames: 3200, currentFrame: 19072, origin: 16000, drift: -128 }));
+  ws.send(JSON.stringify({ type: 'recordingChunk', startFrame: 3200, input: silence, playback: Buffer.alloc(10).toString('base64') })); // malformed: logged, dropped
+  chunk(3200);
+  ws.send(JSON.stringify({ type: 'mockTurn' })); await next('audio'); // the session is still alive
+  ws.send(JSON.stringify({ type: 'stop' })); await next('drain');
+  ws.send(JSON.stringify({ type: 'recordingEnd', frames: 4800 }));
+  const { item } = await next('saved');
+  assert.equal(item.endReason, 'stopped'); assert.equal(item.status, 'completed');
+  assert.equal(item.recording.complete, false); assert.equal(item.recording.durationMs, 300);
+  assert.deepEqual(item.recording.anomalies, [{ type: 'overlap', startFrame: 1472, frames: 1600, endFrame: 3200 }]);
+  assert.deepEqual(item.recording.gaps, []);
+  assert.equal(item.events.filter(e => e.type === 'recording-anomaly').length, 1);
+  assert.deepEqual(item.events.find(e => e.type === 'recording-drift').drift, -128);
+  assert.equal(item.events.find(e => e.type === 'recording-error').error, 'Recording size limit');
+  assert.equal(item.events.filter(e => e.type === 'server-error').length, 0);
+  ws.terminate();
+});

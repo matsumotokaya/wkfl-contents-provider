@@ -17,7 +17,7 @@ function worklet() {
     const output = new Float32Array(1600);
     instance.process([[mic], [speaker]], [[output]]); scope.currentFrame += 1600; return output;
   };
-  return { instance, messages, command, render };
+  return { instance, messages, command, render, scope };
 }
 
 test('worklet common clock preserves 100ms silence, mic, played response and cancelled tail', () => {
@@ -53,10 +53,35 @@ test('partial quantum is flushed before recordingEnd; microphone is never monito
   assert.equal(chunks[0].input.byteLength, 256);
   assert.equal(w.messages.at(-1).type, 'recordingEnd'); assert.equal(w.messages.at(-1).frames, 128);
 });
-test('missing packets are explicit gaps and overlapping/oversized offsets are rejected', () => {
+test('missing packets are explicit gaps; overlapping chunks are dropped as anomalies, oversized ones rejected', () => {
   const t = new Timeline(100); const data = Buffer.alloc(20).toString('base64');
-  t.start(0); t.append({ startFrame: 10, input: data, playback: data });
-  assert.throws(() => t.append({ startFrame: 15, input: data, playback: data }));
+  t.start(0); assert.equal(t.append({ startFrame: 10, input: data, playback: data }), null);
+  assert.deepEqual(t.append({ startFrame: 15, input: data, playback: data }), { type: 'overlap', startFrame: 15, frames: 10, endFrame: 20 });
   assert.throws(() => t.append({ startFrame: 95, input: data, playback: data }));
+  assert.equal(t.endFrame, 20);
   t.end(20); assert.equal(t.metadata().complete, false); assert.deepEqual(t.metadata().gaps, [{ fromFrame: 0, toFrame: 10 }]);
+  assert.equal(t.metadata().anomalies.length, 1);
+});
+test('a stale currentFrame for one quantum keeps chunks contiguous and is reported as drift', () => {
+  const w = worklet(); const mic = new Float32Array(1600).fill(.1), zero = new Float32Array(1600);
+  const quantum = () => { w.instance.process([[mic], [zero]], [[new Float32Array(1600)]]); };
+  w.command('record');
+  quantum(); w.scope.currentFrame += 1600; quantum();            // 0..3200 rendered, clock consistent
+  quantum();                                                     // clock not advanced: same currentFrame twice
+  w.scope.currentFrame += 3200; quantum();                       // catch-up: clock consistent again
+  w.scope.currentFrame += 1600; w.command('finish');
+  const chunks = w.messages.filter(m => m.type === 'recordingChunk').map(m => m.startFrame);
+  assert.deepEqual(chunks, [0, 1600, 3200, 4800]);
+  const drift = w.messages.filter(m => m.type === 'recordingDrift');
+  assert.deepEqual(drift.map(m => m.drift), [-1600]);
+  assert.equal(w.messages.at(-1).frames, 6400);
+  // A forward drift that persists for two quanta is a real gap, inserted once confirmed.
+  const g = worklet(); g.command('record');
+  g.instance.process([[mic], [zero]], [[new Float32Array(1600)]]); g.scope.currentFrame += 3200;
+  g.instance.process([[mic], [zero]], [[new Float32Array(1600)]]); g.scope.currentFrame += 1600;
+  g.instance.process([[mic], [zero]], [[new Float32Array(1600)]]); g.scope.currentFrame += 1600;
+  g.command('finish');
+  assert.deepEqual(g.messages.filter(m => m.type === 'recordingChunk').map(m => m.startFrame), [0, 1600, 4800]);
+  assert.deepEqual(g.messages.filter(m => m.type === 'recordingDrift').map(m => m.drift), [1600, 1600]);
+  assert.equal(g.messages.at(-1).frames, 6400);
 });

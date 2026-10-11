@@ -83,7 +83,7 @@ Gemini 3.8 Liveのみ上部に公式料金とトークン例、下部に日本�
 
 `input-source.wav`は送信した入力の連結、`generated.wav`は受信した24 kHz出力の連結。後者には未再生音も含み、いずれも会話時間軸としては使わない。スピーカーの物理録音ではなく、OSミュート・Bluetooth遅延・耳に届いた音は測定しない。録音なしの場合はunavailableとし、受信音で代用しない。
 
-停止で課金接続を閉じ、最大1.2秒だけローカル録音の末尾を待つ。欠損や終了フラッシュ不足は `recording.complete: false`。プロセスやPCの強制終了ではメモリ上の録音が失われうる。
+停止で課金接続を閉じ、最大1.2秒だけローカル録音の末尾を待つ。欠損や終了フラッシュ不足は `recording.complete: false`。録音位置は worklet が処理したフレーム数（`process()` は1区間に必ず1回）で、ブラウザの `currentFrame` は開始点とずれの報告（`recording-drift`）にだけ使う。すでに置いた音と重なるチャンクは捨てて `recording.anomalies` に記録し、サーバーは録音メッセージの失敗（`recording-error`）で会話を終了しない（2026-10-12）。プロセスやPCの強制終了ではメモリ上の録音が失われうる。
 
 ## 使用量と概算料金
 
@@ -95,7 +95,7 @@ Gemini 3.8 Liveのみ上部に公式料金とトークン例、下部に日本�
 
 ## 起動・終了とデータ保持
 
-起動コマンドと前提バージョンは[README](README.md)。`npm run mock`は外部API・キー・マイクなし、合成テスト音のみ。実接続の `npm start` も起動・ページ閲覧・履歴再生だけでは課金APIを呼ばず、生成/開始の人間操作で接続する。モードは画面上部とGET `/health` の `mock` を確認する。既定60秒、上限180秒、TTS90秒中止。同時1件、自動再接続・自動retryなし。時間制限は金額上限の保証ではない。
+起動コマンドと前提バージョンは[README](README.md)。`npm run mock`は外部API・キー・マイクなし、合成テスト音のみ。実接続の `npm start` も起動・ページ閲覧・履歴再生だけでは課金APIを呼ばず、生成/開始の人間操作で接続する。モードは画面上部とGET `/health` の `mock` を確認する。既定60秒、上限300秒（5分。選択肢は60秒・180秒・5分）、TTS90秒中止。同時1件、自動再接続・自動retryなし。時間制限は金額上限の保証ではない。
 
 会話を画面で停止し保存完了を待ち、起動ターミナルでCtrl-Cを押してサーバーを終了する。過去にツールの実行セッション終了でサーバーも終了したため、開発中は手元ターミナルで起動し続ける。引き継ぎ時にエージェントが起動した切り離しプロセスが残っている場合、`lsof -nP -iTCP:8788 -sTCP:LISTEN` と `ps`、プロセスのcwdでこのアプリと確認してから、会話中でないことを確かめて終了する。無関係なプロセスをkillしない。OS常駐サービスは未設定。
 
@@ -113,7 +113,7 @@ Gemini 3.8 Liveのみ上部に公式料金とトークン例、下部に日本�
 - **実会話で確認（ユーザー）**: Gemini 3.8 Live（声の自然さが最良、本命）、OpenAI Realtime 2.1（会話は成立、日本語に外国人のような訛り）、GPT-Live＋gpt-6-luna（受け答えが最も人間らしく速さも十分、議論相手として有力）。
 - **料金の確認**: OpenAIキー（`…UxoA`）の請求 $0.31 と記録の合計 $0.3138 が一致（内訳は「OpenAI Realtime」節）。Geminiは60秒で約3円。
 - **テスト**: `npm run lint` と `npm test`（51件、外部通信は禁止、課金なし）。
-- **未解決**: 2026-10-11 の Gemini Live の切断（Rasalgethiで2回、`invalid-request` と誤記録）は、診断記録を入れて以降は再発していない。再発したら `metadata.json` の events の `provider-close` / `provider-error` / `server-error` を見る。
+- **切断の原因と対策（2026-10-12）**: 10-11 の4件（Rasalgethi 2回・Realtime mini・Kore。5〜45秒で `invalid-request` 終了）は、どれも直前の録音チャンクが短く（1区間〜10区間）、次のチャンクの開始位置が巻き戻っていた。原因は、ブラウザの AudioWorklet が1区間（128フレーム）だけ前の `currentFrame` を返し、次の区間で追いつく現象。旧実装は `currentFrame` を録音位置にしていたため、巻き戻った位置のチャンクを送り、サーバーが「Invalid recording offset」で課金中の会話ごと終了していた。対策：録音位置を worklet 自身の処理フレーム数にし、`currentFrame` とのずれは `recording-drift` イベントに記録（前向きのずれが2区間続いたときだけ欠損として扱う）。サーバーは録音メッセージの失敗で会話を終了せず、置けないチャンクは捨てて `recording-anomaly` / `recording-error` に残す。`currentFrame` が止まる引き金（Chrome 側の要因）は未特定。次の会話で `recording-drift` の値（頻度と幅）を確認する。接続側の切断は `provider-close` / `provider-error` を見る。
 - **未確認**: Gemini Live での全声・自然な割込み、Flash-Lite TTS、GPT-Live の委任の質（いつ委任するかの指示の調整）、gpt-6-sol との比較。
 
 次の候補（ユーザーと合意済みの方向）:

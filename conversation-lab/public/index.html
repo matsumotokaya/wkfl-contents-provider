@@ -25,7 +25,7 @@
 <label for="live-condition">会話の条件</label><textarea id="live-condition" rows="2" maxlength="1000">音声研究の対話相手として、短い質問を一つずつ返す。</textarea>
 <div id="delegate-field" hidden><label for="live-delegate">考える役（委任先のモデル）</label><select id="live-delegate"></select><p class="note">GPT-Live は会話を受け持ち、考えを深める問いや論点の整理はこのモデルに任せます。委任先の利用料は音声とは別にかかります。</p></div>
 <label for="turn-mode">会話の区切り</label><select id="turn-mode"><option value="automatic">自然会話（音声を自動検出）</option><option value="manual">手動区切り（遅延計測用）</option></select>
-<div class="fields"><div><label id="seconds-label" for="seconds">セッション上限（既定60秒・最大180秒）</label><select id="seconds"><option value="30">30秒</option><option value="60" selected>60秒</option><option value="120">120秒</option><option value="180">180秒</option></select></div><div class="timer"><span id="countdown">—</span><small>残り秒</small></div></div>
+<div class="fields"><div><label id="seconds-label" for="seconds">セッション上限（使いすぎ防止。既定60秒・最大5分）</label><select id="seconds"><option value="60" selected>60秒</option><option value="180">180秒</option><option value="300">5分</option></select></div><div class="timer"><span id="countdown">—</span><small>残り秒</small></div></div>
 <p id="live-note" class="note"></p><p class="notice api-notice">開始後はAPI料金が発生します。マイク音声をGoogleへ送信します。ヘッドホン推奨。</p>
 <div class="actions"><button id="live-start" class="primary" disabled>会話を開始</button><button id="talk" disabled>話し始める</button><button id="live-stop" disabled>停止・保存</button></div>
 <p id="latency" class="note">遅延：発話終了通知 → 最初の音声受信（サーバー）。実際の再生開始までの時間ではありません。</p>

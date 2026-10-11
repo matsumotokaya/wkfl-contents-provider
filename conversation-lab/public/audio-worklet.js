@@ -1,10 +1,19 @@
 // One render clock for microphone and speaker audio. Input 0 is the microphone;
 // input 1 is the model playback bus. Only input 1 reaches the speakers.
+//
+// The recording position is the number of frames this processor has rendered
+// since recording started. process() runs exactly once per render quantum, so
+// that counter is continuous. currentFrame only supplies the origin and a drift
+// report: Chrome can hand process() a stale currentFrame for one quantum (the
+// same value twice, then a catch-up). Treating that as a backward jump produced
+// overlapping chunks that ended paid sessions on 2026-10-11. A forward drift
+// that persists for two quanta is kept as a real gap.
 class Capture extends AudioWorkletProcessor {
   constructor() {
     super();
     this.active = false; this.recording = false; this.samples = [];
     this.mic = []; this.speaker = []; this.origin = null; this.frames = 0; this.chunkStart = 0;
+    this.lastDrift = 0; this.driftReports = 0;
     this.port.onmessage = ({ data }) => {
       if (data === 'record') { this.recording = true; }
       if (data === 'start') { this.samples = []; this.active = true; }
@@ -41,10 +50,12 @@ class Capture extends AudioWorkletProcessor {
     for (let i = 0; i < rendered.length; i++) rendered[i] = speaker?.[i] || 0;
     if (this.recording) {
       if (this.origin === null) { this.origin = currentFrame; this.port.postMessage({ type: 'recordingStarted', frameOrigin: this.origin }); }
-      const offset = currentFrame - this.origin;
-      if (offset !== this.frames) { this.flushRecording(); this.chunkStart = offset; }
+      const drift = currentFrame - this.origin - this.frames;
+      if (drift !== 0 && this.driftReports < 20) { this.driftReports++; this.port.postMessage({ type: 'recordingDrift', frames: this.frames, currentFrame, origin: this.origin, drift }); }
+      if (drift > 0 && drift === this.lastDrift) { this.flushRecording(); this.chunkStart = this.frames + drift; this.frames += drift; this.lastDrift = 0; }
+      else this.lastDrift = drift;
       for (let i = 0; i < rendered.length; i++) { this.mic.push(mic?.[i] || 0); this.speaker.push(rendered[i]); }
-      this.frames = offset + rendered.length;
+      this.frames += rendered.length;
       if (this.mic.length >= 1600) this.flushRecording();
     }
     if (this.active && mic) { this.samples.push(...mic); if (this.samples.length >= 1600) this.flushInput(); }

@@ -347,6 +347,7 @@ $('live-start').onclick = async () => {
       if (data.type === 'flushed' && flushing && !stopping) { send({ type: 'activityEnd' }); flushing = false; controls(); }
       if (data.type === 'recordingStarted') send({ type: 'recordingStarted', frameOrigin: data.frameOrigin });
       if (data.type === 'recordingChunk') send({ type: 'recordingChunk', startFrame: data.startFrame, input: base64(data.input), playback: base64(data.playback) });
+      if (data.type === 'recordingDrift') send({ type: 'recordingDrift', frames: data.frames, currentFrame: data.currentFrame, origin: data.origin, drift: data.drift });
       if (data.type === 'recordingEnd') { send({ type: 'recordingEnd', frames: data.frames }); send({ type: 'stop' }); cleanup(); }
       if (data.type === 'recordingUnavailable') { send({ type: 'stop' }); cleanup(); }
     };
@@ -418,7 +419,7 @@ try {
     $('generate').textContent = 'デモ音を1回保存';
     $('live-title').textContent = '音声UIのデモ';
     $('live-subtitle').textContent = 'DEMO / AIとの会話はできません';
-    $('seconds-label').textContent = 'デモ時間（既定60秒・最大180秒）';
+    $('seconds-label').textContent = 'デモ時間（既定60秒・最大5分）';
     $('live-note').textContent = 'モデル・声は画面確認用の選択肢です。実際の音声会話には接続しません。';
     $('tts-note').textContent = 'この声での読み上げは行いません。合成テスト音だけを保存します。';
     $('turn-mode').hidden = true;

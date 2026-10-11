@@ -103,7 +103,7 @@ export function validate(kind, body) {
     if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 1500) throw new Error('Text must contain 1–1500 characters');
     result.text = body.text.trim();
   } else {
-    if (!Number.isInteger(body.seconds) || body.seconds < 15 || body.seconds > 180) throw new Error('Session limit must be 15–180 seconds');
+    if (!Number.isInteger(body.seconds) || body.seconds < 15 || body.seconds > 300) throw new Error('Session limit must be 15–300 seconds');
     result.seconds = body.seconds;
     if (!['automatic', 'manual'].includes(body.mode)) throw new Error('Invalid turn mode');
     result.mode = body.mode;

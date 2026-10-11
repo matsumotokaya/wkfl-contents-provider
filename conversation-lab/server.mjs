@@ -17,7 +17,7 @@ import { summarizeLive } from './lib/cost.mjs';
 import { demoSettings, demoSets, publicDemoSettings, readDemos } from './lib/voice-demos.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
-export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'mock' : 'experiments'), voiceDemoDir = join(root, 'data', 'voice-demos', demoSets.google.dirName), openaiVoiceDemoDir = join(root, 'data', 'voice-demos', demoSets.openai.dirName), historyLimit = 5, trashDir = null, maxSessionMs = 180000, provider = { synthesize, connectLive, connectRealtime, connectGptLive } } = {}) {
+export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'mock' : 'experiments'), voiceDemoDir = join(root, 'data', 'voice-demos', demoSets.google.dirName), openaiVoiceDemoDir = join(root, 'data', 'voice-demos', demoSets.openai.dirName), historyLimit = 5, trashDir = null, maxSessionMs = 300000, provider = { synthesize, connectLive, connectRealtime, connectGptLive } } = {}) {
   const store = new Store(dataDir);
   // History is kept short on purpose (user decision, 2026-10-11); older items go to the trash folder.
   const prune = () => { try { store.prune(historyLimit, trashDir); } catch { /* Retention must never break a session. */ } };
@@ -121,7 +121,8 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
     const input = [], output = [];
     let lastPong = performance.now();
     let limitTimer, drainTimer, draining = false, drainReason;
-    const timeline = new Timeline();
+    // Sized for the longest allowed session plus the drain grace period.
+    const timeline = new Timeline((Math.ceil(maxSessionMs / 1000) + 2) * 16000);
     const send = message => { if (ws.readyState === 1) ws.send(JSON.stringify(message)); };
     const finish = reason => {
       if (done) return;
@@ -151,6 +152,25 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
       ws.ping();
     }, 10000);
     active = { socket: ws, stop: () => requestFinish('stopped') };
+    // Local recording bookkeeping must never end the paid conversation. A chunk the
+    // timeline cannot place is dropped and logged. (2026-10-11: one stale browser
+    // clock read per session ended four conversations as 'invalid-request'.)
+    const recordingMessages = new Set(['recordingStarted', 'recordingChunk', 'recordingEnd', 'recordingDrift']);
+    let recordingNotes = 0;
+    const note = event => { if (recordingNotes++ < 40) item.events.push(event); };
+    const integer = value => (Number.isSafeInteger(value) ? value : null);
+    const recording = message => {
+      const atMs = Math.round(performance.now() - started);
+      try {
+        if (message.type === 'recordingStarted') { timeline.start(message.frameOrigin); item.events.push({ type: 'recording-start', serverAtMs: atMs, frameOrigin: message.frameOrigin }); }
+        else if (message.type === 'recordingChunk') { const anomaly = timeline.append(message); if (anomaly) note({ type: 'recording-anomaly', atMs, reason: anomaly.type, startFrame: anomaly.startFrame, frames: anomaly.frames, endFrame: anomaly.endFrame }); }
+        else if (message.type === 'recordingEnd') { timeline.end(message.frames); if (draining) finish(drainReason); }
+        else note({ type: 'recording-drift', atMs, frames: integer(message.frames), currentFrame: integer(message.currentFrame), origin: integer(message.origin), drift: integer(message.drift) });
+      } catch (error) {
+        note({ type: 'recording-error', atMs, messageType: message.type, error: String(error?.message).slice(0, 200), startFrame: integer(message.startFrame), frames: integer(message.frames), endFrame: timeline.endFrame });
+        if (message.type === 'recordingEnd' && draining) finish(drainReason);
+      }
+    };
     ws.on('pong', () => { lastPong = performance.now(); });
     ws.on('message', data => {
       if (done) return;
@@ -158,9 +178,7 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
       try {
         message = JSON.parse(data.toString());
         if (message.type === 'stop') return requestFinish('stopped');
-        if (item && ready && message.type === 'recordingStarted') { timeline.start(message.frameOrigin); item.events.push({ type: 'recording-start', serverAtMs: Math.round(performance.now() - started), frameOrigin: message.frameOrigin }); return; }
-        if (item && ready && message.type === 'recordingChunk') { timeline.append(message); return; }
-        if (item && ready && message.type === 'recordingEnd') { timeline.end(message.frames); if (draining) finish(drainReason); return; }
+        if (item && ready && recordingMessages.has(message.type)) { recording(message); return; }
         if (draining) return;
         if (message.type === 'start' && !item) {
           const settings = validate('live', message);

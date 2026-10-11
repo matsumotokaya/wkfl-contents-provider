@@ -1,27 +1,37 @@
 import { pcmFromBase64, wav } from './audio.mjs';
 
 // Browser sample frames are the only alignment clock. Network arrival times are
-// deliberately not used to place audio. Missing packets are marked as gaps.
+// deliberately not used to place audio. Missing packets are marked as gaps. A
+// chunk that would overlap audio already placed is dropped and noted as an
+// anomaly instead of throwing, so recording bookkeeping can never end a session.
 export class Timeline {
-  constructor(maxFrames = 182 * 16000) {
+  constructor(maxFrames = 302 * 16000) {
     this.maxFrames = maxFrames;
     this.chunks = [];
     this.endFrame = 0;
     this.complete = false;
     this.gaps = [];
+    this.anomalies = [];
     this.origin = null;
   }
   start(frameOrigin) {
     if (this.origin !== null || !Number.isSafeInteger(frameOrigin) || frameOrigin < 0) throw new Error('Invalid recording origin');
     this.origin = frameOrigin;
   }
+  // Returns null when the chunk was placed, or the anomaly record when it was dropped.
   append({ startFrame, input, playback }) {
-    if (this.origin === null || this.complete || !Number.isSafeInteger(startFrame) || startFrame < this.endFrame) throw new Error('Invalid recording offset');
+    if (this.origin === null || this.complete || !Number.isSafeInteger(startFrame) || startFrame < 0) throw new Error('Invalid recording offset');
     const mic = pcmFromBase64(input), speaker = pcmFromBase64(playback);
     if (mic.length !== speaker.length || startFrame + mic.length / 2 > this.maxFrames) throw new Error('Recording size limit');
+    if (startFrame < this.endFrame) {
+      const anomaly = { type: 'overlap', startFrame, frames: mic.length / 2, endFrame: this.endFrame };
+      if (this.anomalies.length < 20) this.anomalies.push(anomaly);
+      return anomaly;
+    }
     if (startFrame > this.endFrame) this.gaps.push({ fromFrame: this.endFrame, toFrame: startFrame });
     this.chunks.push({ startFrame, mic, speaker });
     this.endFrame = startFrame + mic.length / 2;
+    return null;
   }
   end(frames) {
     if (this.origin === null || this.complete || !Number.isSafeInteger(frames) || frames < this.endFrame || frames > this.maxFrames) throw new Error('Invalid recording end');
@@ -39,7 +49,7 @@ export class Timeline {
     return {
       schema: 'browser-render-timeline-v1', sampleRate: 16000, frameOrigin: this.origin,
       frames: this.endFrame, durationMs: this.endFrame / 16, flushReceived: this.complete,
-      complete: this.complete && !this.gaps.length, gaps: this.gaps,
+      complete: this.complete && !this.gaps.length && !this.anomalies.length, gaps: this.gaps, anomalies: this.anomalies,
       chunks: this.chunks.map(chunk => ({ startFrame: chunk.startFrame, frames: chunk.mic.length / 2 })),
       input: 'Microphone samples at the AudioWorklet; silence and pauses retained.',
       output: 'Samples actually rendered by the browser Web Audio graph before its destination. Not a physical speaker/loopback recording.',
