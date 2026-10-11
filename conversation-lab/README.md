@@ -66,7 +66,7 @@ npm test
 
 サーバーは127.0.0.1にのみbind。Host・Origin・Fetch Metadata・メモリ上のリクエストトークンを検査し、WebSocketのupgradeでもOriginとトークンを検査します。Googleへの接続はサーバープロキシで、ブラウザに長期キーを渡しません。公開ホスティング・ユーザー認証・公開ストレージは未実装です。
 
-`lib/google.mjs` がベンダー接続、`lib/catalog.mjs` がTTS/Live別のモデル・声カタログ、`lib/credentials.mjs` が用途別資格情報参照、`lib/store.mjs` が保存境界です。声リストは別々に保持し、名称の一致を音質の同一性とは扱いません。Grounding・ツール呼び出し・声の複製は無効／未実装です。
+`lib/google.mjs` がベンダー接続、`lib/catalog.mjs` がTTS/Live別のモデル・声カタログ、`../tools/credentials.mjs` が旧TTS Studioと共通のWKFL専用資格情報参照（`lib/credentials.mjs`から再export）、`lib/store.mjs` が保存境界です。声リストは別々に保持し、名称の一致を音質の同一性とは扱いません。Grounding・ツール呼び出し・声の複製は無効／未実装です。
 
 ## 公式仕様（2026-10-11確認）
 

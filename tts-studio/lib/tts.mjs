@@ -80,7 +80,7 @@ export async function synthesizeSection({ text, voice, persona, model, provider 
   }
   if (process.env.WKFL_TTS_MOCK === "1") return mockPcm(text);
 
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set. Add it to tts-studio/.env or the repo root .env.");
+  if (!apiKey) throw new Error("WKFL Google credential is not configured. See conversation-lab/CREDENTIALS.md.");
   const synthesize = PROVIDERS[provider];
   if (!synthesize) throw new Error(`Unknown TTS provider: ${provider}`);
   return synthesize({ text, voice, persona, model, apiKey });

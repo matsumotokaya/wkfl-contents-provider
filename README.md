@@ -332,7 +332,7 @@ npm run ui   # → http://localhost:8787
 - モデル: `gemini-3.1-flash-tts-preview`（`tts-studio/config.json` で変更可）
 - BGMミックス（ダッキング・フェード）込みで出力。BGMプリセットは `config.json` で管理
 - 出力はそのまま `video/prepare.mjs` に渡せる
-- 必要な環境変数: `GEMINI_API_KEY`（`tts-studio/.env`）
+- Googleキー: WKFL専用の `~/.secrets/wkfl/gemini-token` を旧TTSとConversation Labで共通参照。実体移行前は旧`.env`へfallback（[移行計画](conversation-lab/CREDENTIALS.md)）。
 - 旧Webアプリ（`gemini-tts-converter/`）はtts-studioへの移植・統合が完了したため削除済み
 
 ### 使用できるプリセットボイス

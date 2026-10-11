@@ -1,60 +1,61 @@
-# 資格情報の管理と移行計画
+# WKFL専用キーの中央管理
 
-この文書が答える問い: WKFLのAPIキーはどこから参照されるか／ホーム規約との違い／既存機能を壊さずどう移すか。
+この文書が答える問い: 旧TTS StudioとConversation Labはどのキーを使うか／何を中央化するか／実体をどう移行するか。
 
-確認日: 2026-10-11。秘密値・マスク断片は取得表示せず、コードの参照・ファイルの存在・規約のみを確認した。以下の変数名はコードで要求される名前であり、実ファイル内の登録有無や有効性を意味しない。
+確認日: 2026-10-11。ユーザー確認済み: 既存キーはWKFL専用として発行され、旧TTS Studioと新Conversation Labで同じキーを使う。中央管理は保存場所をホームへ統一する意味で、他プロジェクトとのキー共用ではない。
 
-## 正本
+## 正本と実装
 
-`/Users/kaya.matsumoto/AGENTS.md` の「API トークンの置き方」: `~/.secrets/<service>-token`、600、リポジトリ内には置かない、値をログに出さない、用途／権限を記録する。
+ホーム規約: `/Users/kaya.matsumoto/AGENTS.md` の「API トークンの置き方」。ホームの `.secrets` に保管し、リポジトリ内へ置かない。値をログへ出さない。用途と権限を明確にする。WKFL専用という用途を保持するため、保存先を `~/.secrets/wkfl/gemini-token` に分離する。
 
-Geminiの仕様は `/Users/kaya.matsumoto/playbooks/gemini-tts.md`。別プロジェクト専用キーの記載があるが、WKFLへ流用・参照先追加はしていない。ホーム規約は全キーを全プロジェクトへ注入する方式を求めていない。
+両アプリが `WKFL/tools/credentials.mjs` を参照する実装に統一済み。解決順:
 
-## 現行の参照方式
+1. 明示された `GEMINI_API_KEY_FILE`（絶対パス。無効なら黙ってfallbackしない）
+2. プロセス環境の `GEMINI_API_KEY`（既存の明示設定との互換性）
+3. **`/Users/kaya.matsumoto/.secrets/wkfl/gemini-token`**
+4. 移行前互換: `WKFL/tts-studio/.env` の `GEMINI_API_KEY`
+5. 移行前互換: `WKFL/.env` の `GEMINI_API_KEY`
 
-| 用途 | 変数・保存方式 | 根拠・課題 |
+一般共用の `~/.secrets/gemini-token` や他プロジェクト専用ファイルは自動探索しない。ベンダーごと・必要な呼び出し時だけ解決する。dotenvのparseは旧設定からGoogleキーだけを選ぶために使い、他のキーや設定をprocess.envへ一括注入しない。モックはキーを読まない。新Lab内の `.env` は読み込まない。
+
+画面の参照方式表示はファイル等の存在に基づく候補表示で、キーの有効性や課金権限を意味しない。`legacy-env-candidate` は旧ファイル候補。共有ローダーはNode 18以降でも利用でき、旧TTSの最小ランタイムは変更していない。
+
+## 移行元の確認結果（秘密値なし）
+
+| ファイル | 存在 | 変数宣言 |
 |---|---|---|
-| TTS Studio | `GEMINI_API_KEY`。`tts-studio/.env` → WKFL `.env` | `tts-studio/lib/pipeline.mjs`: dotenvでファイル全体をprocess.envへロード。リポジトリ内保存を推奨するREADMEがホーム規約と不一致 |
-| 記事生成 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`。WKFL `.env` | `app/engine/synthesize_*.py`、`app/main.py`、`app/engine/wkfl_pipeline.py`。dotenvによる全体ロード |
-| ニュース要約 | `ANTHROPIC_API_KEY`。WKFL `.env`を個別パース | `app/engine/list_today_news.py`: 既存環境変数をファイル値で上書きするため、他の読み込み順とも不統一 |
-| 画像生成 | `FAL_KEY` または `~/.secrets/fal-token` | `tools/image_fal.py`: 用途別・ホーム参照で規約に近い |
-| 定期実行 | GitHub Secretsの`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | `.github/workflows/daily_wkfl_briefing.yml`: クラウドの別保管場所。今回変更しない |
-| Render旧Web | `ANTHROPIC_API_KEY`、`sync:false` | `render.yaml`: 設定のみ確認。稼働・資格情報の有効性は未確認 |
+| `/Users/kaya.matsumoto/projects/WKFL/tts-studio/.env` | あり | `GEMINI_API_KEY`あり |
+| `/Users/kaya.matsumoto/projects/WKFL/.env` | あり | `GEMINI_API_KEY`あり |
 
-## 新Labの方式（実装済み）
+確認したのは存在と変数名だけ。値を表示・複製・移動しておらず、2つの値が同じか、有効かも未確認。従来のTTSの読み込み順は `tts-studio/.env` が先なので、**中央化する第一候補は `tts-studio/.env` の `GEMINI_API_KEY`**。起動時に明示された環境変数がある場合はそちらが優先されるため、実移行前に利用方法を確認する。
 
-`lib/credentials.mjs` がGoogleの呼び出し時だけ解決する。ページ表示では参照方式だけ返し、ファイル内容は読まない。モックは資格情報を一切読まない。
+## ユーザー確認後に行う具体操作（今回は未実行）
 
-1. 明示的な `GEMINI_API_KEY_FILE`（絶対パス）
-2. プロセスの `GEMINI_API_KEY`（CIや一時的な実行環境の互換性）
-3. `~/.secrets/gemini-token`（統一先候補。今回作成していない）
-4. 移行前互換としてWKFLの `tts-studio/.env` → `.env` から **GEMINI_API_KEYだけ**を取り出す
+1. **元**: `/Users/kaya.matsumoto/projects/WKFL/tts-studio/.env` 内の `GEMINI_API_KEY` を移行元として採用する。
+2. **先**: `/Users/kaya.matsumoto/.secrets/wkfl/gemini-token` に値だけを保存する。親ディレクトリの作成とアクセス権（ディレクトリ700、ファイル600）設定を伴う。保存先が既に存在する場合は上書きせず停止して確認する。
+3. **参照切替**: 保存先は両アプリの既定パスなので、全プロジェクト向け環境変数注入やシェル設定への永続登録は不要。両アプリを次回起動すると中央ファイルを優先する。別の明示 `GEMINI_API_KEY` / `GEMINI_API_KEY_FILE` がある場合は優先順位に従う。
+4. **旧ファイル**: 当初は両方の`.env`をそのまま残し、rollbackできるようにする。他社キーや非秘密設定を消さない。
+5. **確認**: キーが読めるかの確認と、料金を伴うAPI試験を区別する。実API試験は人間が回数・概算費用を確認して行う。
+6. **後片付けは別承認**: 切替確認後、`tts-studio/.env` とWKFL `.env` の `GEMINI_API_KEY` 宣言だけを削除する対象として提示する。ファイル全体は削除しない。キーのローテーション／失効は別作業。
 
-明示パスが無効なら他のキーへ黙って切り替えず失敗する。既存ファイル内の他社キーをprocess.envへ注入せず、別プロジェクトのキーを探さない。新Lab内の `.env` はロードしない。`.env.example` は秘密なしの説明だけ。
+承認対象は、上記の移行元・移行先への秘密値保存・ディレクトリ作成・権限設定。今回完了したのは**非秘密コードと文書の統一だけ**であり、実体移行は完了していない。
 
-画面の `legacy-env-candidate` はファイルが存在するという意味で、Googleキーの存在・有効性を保証しない。
+## 既存機能への影響
 
-## 別途確認が必要な変更（未実行）
+- 旧TTSのCLI、一括生成、セクション試聴は同じ共有ローダーを使う。中央ファイルがまだない現在は旧設定へfallbackするため、先に秘密を移す必要はない。
+- 旧TTSは`.env`全体の自動注入をやめた。`WKFL_TTS_MOCK`や`PORT`等の非秘密設定は起動時のプロセス環境で指定する。APIキー以外を`.env`で運用していた場合はこの変更に注意する。
+- 旧TTSの生成モデル・台本処理・BGM処理は変更しない。実APIによる回帰試験は行っていない。
+- Conversation Labは同じWKFL専用キーを使い、APIキーをブラウザへ渡さない。
 
-1. **移行元と用途の確定**: WKFLで現在使うGoogle／OpenAI／Anthropicキーの所有プロジェクト・課金先を人間が確認。値はチャットに貼らない。
-2. **保存先の選択**: WKFL専用キーなら `~/.secrets/wkfl/<service>-token` の用途別配置＋`*_API_KEY_FILE`指定が候補。全プロジェクト共用と確認されたキーだけ `~/.secrets/<service>-token`。別用途のキーを統合しない。
-3. **承認後の資格情報移行**: 選ばれたキーだけを指定先へ安全に移動し権限600を設定。秘密値コピー、新しい永続設定、権限変更は今回は実行していない。
-4. **既存ローダーの段階更新**: TTS StudioとPython記事生成にも同じ「明示パス→環境変数→ホーム→移行前fallback」を適用。必要なベンダーだけ参照する。変更後は仮キーの単体検証、実APIは人間による限定試験。
-5. **切り替え確認後に旧保存を整理**: 旧 `.env` の該当キー削除・キーの失効／再発行・ホーム規約への台帳追記は対象と影響を確認して別途実施。GitHub Secrets／Renderは独立して扱う。
+## 他サービスの扱い
 
-現時点では既存WKFLのローダーも秘密ファイルも変更していないので、旧機能の資格情報参照は維持される。新Labだけは用途別参照が使える状態。全体正規化の完了とは扱わない。
+| サービス・用途 | 現行コードでの参照 | 今回の扱い |
+|---|---|---|
+| OpenAIの記事生成 | `OPENAI_API_KEY`、WKFL `.env`のdotenv読み込み | 変更しない。将来WKFL専用保存へ移す場合は記事生成への影響も確認 |
+| Anthropicの記事生成／要約 | `ANTHROPIC_API_KEY`。`app/engine/list_today_news.py`は独自パースと環境変数上書き | 変更しない。将来のローダー統一対象 |
+| GitHub Actions | GitHub SecretsのOpenAI／Anthropic | ローカル移行と別管理。変更しない |
+| Render旧Web | `render.yaml`の`ANTHROPIC_API_KEY`、`sync:false` | 設定のみ確認済み。変更しない |
+| fal画像生成 | `FAL_KEY` または `~/.secrets/fal-token` | ホーム参照を維持。新Labから読まない |
+| ElevenLabs／Cartesia | 新Labには接続・資格情報実装なし | キー登録・保存先作成をしない |
 
-
-## 今回の推奨と操作対象（未実行）
-
-推奨は **WKFLの用途ごとに明示的なファイル参照** です。将来の追加ベンダーも共通の全キー注入は使いません。共用が人間によって確認されたサービスだけ既存の共用ファイルをそのまま参照し、同じキーの複製は増やしません。
-
-| サービス | 今回特定できた移行元候補 | 移行先候補／参照だけの変更 | 影響と事前確認 |
-|---|---|---|---|
-| Google Gemini | `/Users/kaya.matsumoto/projects/WKFL/tts-studio/.env` または WKFL直下`.env` の`GEMINI_API_KEY`（実際の登録先・値は未確認） | WKFL専用なら`~/.secrets/wkfl/gemini-token`、Labは`GEMINI_API_KEY_FILE`で明示参照。共用既存キーなら承認済み共用ファイルを指定 | 課金先・所有者・既存どちらの設定が有効かを人間が確認。旧TTSは現状ファイル参照に非対応なので、先にローダー更新が必要。旧`.env`を先に消さない |
-| OpenAI | WKFL直下`.env`の`OPENAI_API_KEY`を読む記事生成コード（登録有無未確認） | `~/.secrets/wkfl/openai-token`候補と`OPENAI_API_KEY_FILE`対応を将来追加 | 記事生成にも使うため、Labだけの都合で失効・置換しない。GitHub Secretsは別途維持 |
-| Anthropic | WKFL直下`.env`の`ANTHROPIC_API_KEY`を読む記事生成・要約コード（登録有無未確認） | `~/.secrets/wkfl/anthropic-token`候補と`ANTHROPIC_API_KEY_FILE`対応を将来追加 | ニュース要約の独自パース／環境変数上書きも同時整理が必要。Renderの設定は別途維持 |
-| fal | コード上で`~/.secrets/fal-token`を参照済み | 移行対象外。既存の用途別参照を維持 | 新Labは使わないため読み込まない |
-| ElevenLabs / Cartesia | 新Labには資格情報・接続実装なし | 今回は保存先の作成・キー登録をしない | 接続追加時に用途・課金先と共に決める |
-
-次に確認する具体事項は「WKFLのGoogleキーの現用保存先」「そのキーが専用か共用か」「移行先」の3点です。確認後も、秘密値移動・権限600設定・永続的なパス登録・旧`.env`キー削除を実行する直前に対象操作を提示します。今回行ったのはソースと移行案のみで、秘密ファイルに触れていません。
+コード上の出所: `tools/credentials.mjs`、`tts-studio/lib/pipeline.mjs`、`tts-studio/server.mjs`、`conversation-lab/lib/credentials.mjs`、`app/engine/synthesize_*.py`、`app/engine/wkfl_pipeline.py`、`.github/workflows/daily_wkfl_briefing.yml`、`tools/image_fal.py`。

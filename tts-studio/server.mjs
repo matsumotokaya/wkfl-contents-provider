@@ -2,12 +2,14 @@
 //
 //   npm run ui   ->  http://localhost:8787
 //
-// The API key stays server-side (.env); the browser never sees it.
+// The WKFL API key is resolved server-side; the browser never sees it.
 
 import express from "express";
 import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  googleKey,
+  googleCredentialSource,
   STUDIO_ROOT,
   ARTICLES_DIR,
   loadConfig,
@@ -39,7 +41,7 @@ app.get("/api/config", (_req, res) => {
     personas: cfg.personas,
     bgm: Object.keys(cfg.bgm),
     mock: process.env.WKFL_TTS_MOCK === "1",
-    hasApiKey: Boolean(process.env.GEMINI_API_KEY),
+    credentialSource: googleCredentialSource(),
   });
 });
 
@@ -84,7 +86,7 @@ app.post("/api/preview", async (req, res) => {
       persona: resolvePersona(cfg, persona),
       model: cfg.model,
       provider: cfg.provider,
-      apiKey: process.env.GEMINI_API_KEY,
+      apiKey: googleKey(),
     });
     const wav = encodeWav16([int16ToF32(pcm)], sampleRate);
     res.set("Content-Type", "audio/wav").send(wav);
@@ -142,5 +144,5 @@ app.post("/api/render", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`WKFL TTS Studio UI: http://localhost:${PORT}`);
   if (process.env.WKFL_TTS_MOCK === "1") console.log("MODE: MOCK (no API calls)");
-  else if (!process.env.GEMINI_API_KEY) console.log("NOTE: GEMINI_API_KEY not set — generation will fail until you add it to .env");
+  else console.log(`Credential source: ${googleCredentialSource()} (availability only; not validated)`);
 });

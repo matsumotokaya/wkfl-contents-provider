@@ -135,7 +135,7 @@ async function init() {
   CFG = await (await api("/api/config")).json();
   $("modelBadge").textContent = CFG.model;
   if (CFG.mock) { $("modeBadge").textContent = "MOCKモード（API未使用）"; $("modeBadge").className = "badge mock"; }
-  else if (!CFG.hasApiKey) { $("modeBadge").textContent = "⚠ GEMINI_API_KEY 未設定"; $("modeBadge").className = "badge mock"; }
+  else { $("modeBadge").textContent = `キー参照: ${CFG.credentialSource}（未検証）`; }
 
   // voices
   for (const v of CFG.voices) {

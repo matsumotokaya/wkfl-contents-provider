@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { config as loadDotenv } from "dotenv";
+import { credentialSource, loadGoogleKey } from "../../tools/credentials.mjs";
 
 import { splitScript } from "./split.mjs";
 import { parseUtterances, speechText, buildTimingJson } from "./timing.mjs";
@@ -23,9 +23,15 @@ export const STUDIO_ROOT = join(here, "..");
 export const REPO_ROOT = join(STUDIO_ROOT, "..");
 export const ARTICLES_DIR = join(REPO_ROOT, "articles");
 
-// .env: tts-studio/.env first, repo root .env as fallback.
-loadDotenv({ path: join(STUDIO_ROOT, ".env") });
-loadDotenv({ path: join(REPO_ROOT, ".env") });
+// Resolve the WKFL Google key only when generation is explicitly requested.
+export function googleKey() {
+  return loadGoogleKey({ repoRoot: REPO_ROOT, mock: process.env.WKFL_TTS_MOCK === "1" });
+}
+export function googleCredentialSource() {
+  if (process.env.WKFL_TTS_MOCK === "1") return "mock-no-key-read";
+  try { return credentialSource({ repoRoot: REPO_ROOT }).type; }
+  catch { return "invalid-path"; }
+}
 
 export function loadConfig() {
   return JSON.parse(readFileSync(join(STUDIO_ROOT, "config.json"), "utf8"));
@@ -64,7 +70,7 @@ export function findPodcastScript(date) {
 // Returns { wavBuffer, timing, totalMs, sectionStartsMs, sectionDurationsMs }.
 export async function generateEpisode({ sections, voice, persona, bgm, config, onProgress = () => {} }) {
   const cfg = config ?? loadConfig();
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = googleKey();
   const model = cfg.model;
   const personaText = resolvePersona(cfg, persona);
   const voiceId = voice ?? cfg.defaults.voice;

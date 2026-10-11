@@ -15,7 +15,6 @@ podcast台本（`articles/{date}/*_podcast.md`）から、ナレーション音�
 ```bash
 cd tts-studio
 npm install
-cp .env.example .env   # GEMINI_API_KEY を記入
 ```
 
 前提: Node.js 18+、ffmpeg（BGMデコード用。`brew install ffmpeg`）
@@ -58,7 +57,11 @@ npm run ui   # → http://localhost:8787
 3. **設定**: ナレーター / ペルソナ / BGM をプリセットから選択
 4. **生成**: セクション単位の試聴 → 一括生成プレビュー → `articles/{date}/` へ保存
 
-APIキーはサーバー側（.env）のみで使用し、ブラウザには渡らない。
+APIキーはサーバー側のみで使用し、ブラウザには渡らない。
+
+旧TTS StudioとConversation Labは `../tools/credentials.mjs` を共用し、WKFL専用の `~/.secrets/wkfl/gemini-token` を中央保存先とする。優先順は明示的な `GEMINI_API_KEY_FILE` → プロセスの `GEMINI_API_KEY` → WKFL専用中央ファイル → 移行前互換の `tts-studio/.env` → WKFL `.env`。必要なGoogleキーだけを取り出し、`.env`全体を環境変数へ注入しない。モックではキーを読まない。
+
+秘密の実体移行は未実施。既存`.env`は移行承認・確認が済むまで維持する。具体的な元ファイル、移行順序、旧設定の扱いは [資格情報移行計画](../conversation-lab/CREDENTIALS.md)。新規のrepo内`.env`へのキー保存は推奨しない。非秘密設定（`WKFL_TTS_MOCK`等）はプロセス環境で渡す。
 
 ## 設定（config.json）
 

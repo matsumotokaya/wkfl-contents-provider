@@ -12,7 +12,7 @@
 //   --bgm <key|path|none>  acoustic | fashion | kawaii | /path/to/file | none
 //   --dry-run          split only; show sections and exit
 //
-// Env: GEMINI_API_KEY (tts-studio/.env or repo root .env)
+// Key: ~/.secrets/wkfl/gemini-token or explicit GEMINI_API_KEY_FILE / GEMINI_API_KEY.
 //      WKFL_TTS_MOCK=1  placeholder audio, no API calls (pipeline testing)
 
 import { readFileSync } from "node:fs";

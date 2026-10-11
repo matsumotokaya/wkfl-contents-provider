@@ -122,10 +122,13 @@ test('Live VAD is automatic by default selection; manual is explicit', () => {
 });
 test('credential resolution reads only a selected fake key, without global injection', t => {
   const dir = mkdtempSync(join(tmpdir(), 'wkfl-lab-credential-test-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
-  mkdirSync(join(dir, 'tts-studio')); mkdirSync(join(dir, '.secrets'));
+  mkdirSync(join(dir, 'tts-studio')); mkdirSync(join(dir, '.secrets', 'wkfl'), { recursive: true });
   writeFileSync(join(dir, 'tts-studio', '.env'), 'UNRELATED_FAKE_KEY=do-not-inject\nGEMINI_API_KEY=fake-legacy\n');
   const env = {}; assert.equal(loadGoogleKey({ env, home: dir, repoRoot: dir }), 'fake-legacy'); assert.deepEqual(env, {});
-  writeFileSync(join(dir, '.secrets', 'gemini-token'), 'fake-home');
+  assert.equal(loadGoogleKey({ env: { GEMINI_API_KEY_FILE: '/must-not-read' }, home: '/missing', repoRoot: '/missing', mock: true }), undefined);
+  writeFileSync(join(dir, '.secrets', 'gemini-token'), 'fake-unrelated-global');
+  assert.equal(loadGoogleKey({ env, home: dir, repoRoot: dir }), 'fake-legacy');
+  writeFileSync(join(dir, '.secrets', 'wkfl', 'gemini-token'), 'fake-home');
   assert.equal(loadGoogleKey({ env, home: dir, repoRoot: dir }), 'fake-home');
   assert.throws(() => loadGoogleKey({ env: { GEMINI_API_KEY_FILE: '/missing-explicit-file' }, home: dir, repoRoot: dir }));
 });
