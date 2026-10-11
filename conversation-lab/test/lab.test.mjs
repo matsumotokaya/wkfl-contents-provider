@@ -72,10 +72,11 @@ test('manual mock dialog saves separate tracks, usage stays unknown, measured ti
   ws.send(JSON.stringify({ type: 'activityEnd' }));
   assert.equal((await next('metric')).metric.simulated, true); await next('audio');
   ws.send(JSON.stringify({ type: 'stop' })); const { item } = await next('saved');
-  assert.equal(item.status, 'completed'); assert.deepEqual(item.files, ['input.wav', 'output.wav']);
+  assert.equal(item.status, 'completed'); assert.deepEqual(item.files, ['input-source.wav', 'generated.wav']);
+  assert.equal(item.recording.unavailable, true);
   assert.equal(item.events.filter(e => e.type === 'input-chunk')[0].bytes, 3200);
-  assert.equal(readFileSync(join(f.dir, item.id, 'input.wav')).readUInt32LE(24), 16000);
-  assert.equal(readFileSync(join(f.dir, item.id, 'output.wav')).readUInt32LE(24), 24000);
+  assert.equal(readFileSync(join(f.dir, item.id, 'input-source.wav')).readUInt32LE(24), 16000);
+  assert.equal(readFileSync(join(f.dir, item.id, 'generated.wav')).readUInt32LE(24), 24000);
   ws.terminate();
 });
 test('automatic mode accepts continuous input and stops at the server time limit', async t => {
@@ -127,4 +128,35 @@ test('credential resolution reads only a selected fake key, without global injec
   writeFileSync(join(dir, '.secrets', 'gemini-token'), 'fake-home');
   assert.equal(loadGoogleKey({ env, home: dir, repoRoot: dir }), 'fake-home');
   assert.throws(() => loadGoogleKey({ env: { GEMINI_API_KEY_FILE: '/missing-explicit-file' }, home: dir, repoRoot: dir }));
+});
+
+
+test('health and recording drain are local only; server keeps received audio separate', async t => {
+  const f = await fixture(t);
+  assert.equal((await request(f.url, '/health')).value.mock, true);
+  assert.equal((await request(f.url, '/health', { headers: { Origin: 'https://external.test' } })).status, 403);
+  const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
+  ws.send(JSON.stringify({ ...start, mode: 'automatic' })); await next('ready');
+  ws.send(JSON.stringify({ type: 'recordingStarted', frameOrigin: 16000 }));
+  const silence = Buffer.alloc(3200), mic = Buffer.alloc(3200), played = Buffer.alloc(3200);
+  for (let i = 0; i < 1600; i++) { mic.writeInt16LE(2000, i * 2); played.writeInt16LE(4000, i * 2); }
+  for (const [index, input, playback] of [[0, silence, silence], [1, mic, silence], [2, silence, played], [3, silence, silence]]) {
+    ws.send(JSON.stringify({ type: 'recordingChunk', startFrame: index * 1600, input: input.toString('base64'), playback: playback.toString('base64') }));
+  }
+  ws.send(JSON.stringify({ type: 'mockTurn' })); await next('audio');
+  ws.send(JSON.stringify({ type: 'stop' })); await next('drain');
+  ws.send(JSON.stringify({ type: 'recordingEnd', frames: 6400 }));
+  const { item } = await next('saved');
+  assert.equal(item.recording.complete, true); assert.equal(item.recording.durationMs, 400);
+  const output = readFileSync(join(f.dir, item.id, 'output.wav'));
+  const input = readFileSync(join(f.dir, item.id, 'input.wav'));
+  const mix = readFileSync(join(f.dir, item.id, 'mix.wav'));
+  assert.equal(output.length, 44 + 6400 * 2); assert.equal(input.length, output.length);
+  assert.equal(input.readInt16LE(44 + 1600 * 2), 2000);
+  assert.equal(output.readInt16LE(44 + 3200 * 2), 4000);
+  assert.equal(output.readInt16LE(44 + 4800 * 2), 0);
+  assert.equal(mix.readInt16LE(44 + 3200 * 2), 2000);
+  assert.ok(item.files.includes('generated.wav'));
+  assert.equal((await request(f.url, `/experiments/${item.id}/mix.wav`)).status, 200);
+  ws.terminate();
 });

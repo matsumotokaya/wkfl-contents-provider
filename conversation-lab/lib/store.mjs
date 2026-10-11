@@ -20,10 +20,18 @@ export class Store {
     writeFileSync(join(this.root, item.id, name), bytes, { mode: 0o600 });
     if (!item.files.includes(name)) item.files.push(name);
   }
-  finishLive(item, input, output, reason) {
-    if (input.length) this.audio(item, 'input.wav', wav(Buffer.concat(input), 16000));
-    if (output.length) this.audio(item, 'output.wav', wav(Buffer.concat(output), 24000));
-    item.recording = 'Separate concatenated PCM tracks; pauses are not inserted. Chunk offsets and server receipt times are in events. Output includes generated audio, even if playback was interrupted.';
+  finishLive(item, input, output, reason, timeline) {
+    if (timeline?.origin !== null && timeline?.origin !== undefined) {
+      const tracks = timeline.render();
+      this.audio(item, 'mix.wav', tracks.mix);
+      this.audio(item, 'input.wav', tracks.input);
+      this.audio(item, 'output.wav', tracks.output);
+      item.recording = timeline.metadata();
+    } else {
+      item.recording = { schema: 'browser-render-timeline-v1', complete: false, unavailable: true, reason: 'No browser render frames received; transport audio is not substituted.' };
+    }
+    if (input.length) this.audio(item, 'input-source.wav', wav(Buffer.concat(input), 16000));
+    if (output.length) this.audio(item, 'generated.wav', wav(Buffer.concat(output), 24000));
     item.status = reason === 'stopped' || reason === 'time-limit' ? 'completed' : 'interrupted';
     item.endReason = reason; item.endedAt = new Date().toISOString();
     this.save(item);

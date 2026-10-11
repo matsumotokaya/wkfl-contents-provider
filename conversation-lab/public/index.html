@@ -26,7 +26,7 @@
 <div class="actions"><button id="live-start" class="primary" disabled>会話を開始</button><button id="talk" disabled>話し始める</button><button id="live-stop" disabled>停止・保存</button></div>
 <p id="latency" class="note">遅延：発話終了通知 → 最初の音声受信（サーバー）。実際の再生開始までの時間ではありません。</p>
 <div id="transcript" class="transcript" aria-live="polite"><span class="muted">会話の文字起こしがここに表示されます。</span></div>
-<p class="note">入力・応答を別々のWAVに保存。各トラックは無音の間を詰めた録音で、元の会話の時間軸は再現しません。途中停止した応答も生成済み部分を含みます。</p>
+<p class="note">入力とブラウザ再生音を同じ時間軸で録音し、無音を保った別WAVとミックスを保存。未再生の受信音は原音として分離します。物理スピーカーの録音ではありません。</p>
 </section>
 </div></div>
 <section class="archive" aria-labelledby="archive-title"><div class="archive-head"><div><p class="eyebrow">EXPERIMENT ARCHIVE</p><h2 id="archive-title">このモデルの履歴</h2></div><button id="refresh">一覧を更新</button></div><p class="note">再生は保存済みファイルのみ。APIを呼びません。費用は算出せず、取得できた使用量を詳細に記録します。</p><div id="experiments"><p class="empty">実験一覧を読み込んでいます。</p></div></section>

@@ -8,6 +8,7 @@ import { catalog, sampleText, validate } from './lib/catalog.mjs';
 import { credentialSource, loadGoogleKey } from './lib/credentials.mjs';
 import { synthesize, connectLive } from './lib/google.mjs';
 import { pcmFromBase64 } from './lib/audio.mjs';
+import { Timeline } from './lib/timeline.mjs';
 import { Store } from './lib/store.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -38,6 +39,7 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
     const pathname = new URL(req.url, 'http://localhost').pathname;
     if (req.method === 'POST' && (req.headers.origin !== `http://${req.headers.host}` || req.headers['x-lab-token'] !== csrf)) return json(res, 403, { error: 'Invalid request token or Origin' });
     try {
+      if (req.method === 'GET' && pathname === '/health') return json(res, 200, { status: 'ok', mock, providerCallsOnPageLoad: false });
       if (req.method === 'GET' && pathname === '/api/config') {
         let source = 'missing';
         try { source = mock ? 'mock-no-key-read' : credentialSource({ repoRoot: join(root, '..') }).type; } catch { source = 'invalid-path'; }
@@ -69,7 +71,7 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
           return json(res, 502, { error: controller.signal.aborted ? 'Generation stopped or timed out; remote billing may already have occurred.' : 'Generation failed. Check key access, model availability and quota. No automatic retry.', id: item.id });
         } finally { clearTimeout(timeout); res.off('close', disconnect); active = null; }
       }
-      const audio = pathname.match(/^\/experiments\/([a-f0-9-]{36})\/(speech\.wav|input\.wav|output\.wav|metadata\.json)$/);
+      const audio = pathname.match(/^\/experiments\/([a-f0-9-]{36})\/(speech\.wav|input\.wav|output\.wav|mix\.wav|input-source\.wav|generated\.wav|metadata\.json)$/);
       if (req.method === 'GET' && audio) {
         const path = join(dataDir, audio[1], audio[2]);
         if (!existsSync(path)) return json(res, 404, { error: 'File not found' });
@@ -97,48 +99,63 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
     let started = performance.now(), inputBytes = 0, outputBytes = 0;
     const input = [], output = [];
     let lastPong = performance.now();
-    let limitTimer;
+    let limitTimer, drainTimer, draining = false, drainReason;
+    const timeline = new Timeline();
     const send = message => { if (ws.readyState === 1) ws.send(JSON.stringify(message)); };
     const finish = reason => {
       if (done) return;
-      done = true; clearTimeout(initialTimer); clearTimeout(limitTimer); clearInterval(heartbeat);
+      done = true; clearTimeout(initialTimer); clearTimeout(limitTimer); clearTimeout(drainTimer); clearInterval(heartbeat);
       upstream?.close();
       try {
-        if (item) { store.finishLive(item, input, output, reason); send({ type: 'saved', item }); }
+        if (item) { store.finishLive(item, input, output, reason, timeline); send({ type: 'saved', item }); }
       } catch { send({ type: 'error', message: 'Local recording could not be saved.' }); }
       if (active?.socket === ws) active = null;
       ws.close(1000, reason);
       const terminateTimer = setTimeout(() => ws.terminate(), 1000); terminateTimer.unref();
+    };
+    const requestFinish = reason => {
+      if (done || draining) return;
+      draining = true; drainReason = reason; upstream?.close();
+      clearTimeout(limitTimer);
+      // The paid connection ends immediately. Only local recording flush is
+      // allowed during this bounded grace period.
+      if (!ready || timeline.complete || ws.readyState !== 1) return finish(reason);
+      send({ type: 'drain', reason });
+      drainTimer = setTimeout(() => finish(reason), 1200);
     };
     const initialTimer = setTimeout(() => finish('setup-timeout'), 20000);
     const heartbeat = setInterval(() => {
       if (performance.now() - lastPong > 25000) return finish('client-unavailable');
       ws.ping();
     }, 10000);
-    active = { socket: ws, stop: () => finish('stopped') };
+    active = { socket: ws, stop: () => requestFinish('stopped') };
     ws.on('pong', () => { lastPong = performance.now(); });
     ws.on('message', data => {
       if (done) return;
       try {
         const message = JSON.parse(data.toString());
-        if (message.type === 'stop') return finish('stopped');
+        if (message.type === 'stop') return requestFinish('stopped');
+        if (item && ready && message.type === 'recordingStarted') { timeline.start(message.frameOrigin); item.events.push({ type: 'recording-start', serverAtMs: Math.round(performance.now() - started), frameOrigin: message.frameOrigin }); return; }
+        if (item && ready && message.type === 'recordingChunk') { timeline.append(message); return; }
+        if (item && ready && message.type === 'recordingEnd') { timeline.end(message.frames); if (draining) finish(drainReason); return; }
+        if (draining) return;
         if (message.type === 'start' && !item) {
           const settings = validate('live', message);
           item = store.begin('live', settings, mock); started = performance.now();
           const key = mock ? null : loadGoogleKey({ repoRoot: join(root, '..') });
-          limitTimer = setTimeout(() => finish('time-limit'), Math.min(settings.seconds * 1000, maxSessionMs));
+          limitTimer = setTimeout(() => requestFinish('time-limit'), Math.min(settings.seconds * 1000, maxSessionMs));
           upstream = provider.connectLive(settings, {
             ready() { if (done) return; ready = true; speaking = settings.mode === 'automatic'; clearTimeout(initialTimer); send({ type: 'ready', id: item.id, seconds: settings.seconds, mock }); },
-            error() { send({ type: 'error', message: 'Live connection failed. Check key access, model availability and quota. No automatic retry.' }); finish('provider-error'); },
-            close() { finish('provider-closed'); },
+            error() { send({ type: 'error', message: 'Live connection failed. Check key access, model availability and quota. No automatic retry.' }); requestFinish('provider-error'); },
+            close() { requestFinish('provider-closed'); },
             message(response) {
-              if (done) return;
+              if (done || draining) return;
               try {
                 const t = Math.round(performance.now() - started);
                 if (response.usageMetadata) item.usage.push({ atMs: t, source: 'google-live', value: response.usageMetadata });
                 const content = response.serverContent;
                 if (!content) return;
-                if (content.interrupted) send({ type: 'interrupted' });
+                if (content.interrupted) { item.events.push({ type: 'provider-interrupted', atMs: t }); send({ type: 'interrupted' }); }
                 for (const part of content.modelTurn?.parts || []) {
                   const audio = part.inlineData;
                   if (!audio) continue;

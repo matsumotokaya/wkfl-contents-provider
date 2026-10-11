@@ -43,3 +43,18 @@ Geminiの仕様は `/Users/kaya.matsumoto/playbooks/gemini-tts.md`。別プロ�
 5. **切り替え確認後に旧保存を整理**: 旧 `.env` の該当キー削除・キーの失効／再発行・ホーム規約への台帳追記は対象と影響を確認して別途実施。GitHub Secrets／Renderは独立して扱う。
 
 現時点では既存WKFLのローダーも秘密ファイルも変更していないので、旧機能の資格情報参照は維持される。新Labだけは用途別参照が使える状態。全体正規化の完了とは扱わない。
+
+
+## 今回の推奨と操作対象（未実行）
+
+推奨は **WKFLの用途ごとに明示的なファイル参照** です。将来の追加ベンダーも共通の全キー注入は使いません。共用が人間によって確認されたサービスだけ既存の共用ファイルをそのまま参照し、同じキーの複製は増やしません。
+
+| サービス | 今回特定できた移行元候補 | 移行先候補／参照だけの変更 | 影響と事前確認 |
+|---|---|---|---|
+| Google Gemini | `/Users/kaya.matsumoto/projects/WKFL/tts-studio/.env` または WKFL直下`.env` の`GEMINI_API_KEY`（実際の登録先・値は未確認） | WKFL専用なら`~/.secrets/wkfl/gemini-token`、Labは`GEMINI_API_KEY_FILE`で明示参照。共用既存キーなら承認済み共用ファイルを指定 | 課金先・所有者・既存どちらの設定が有効かを人間が確認。旧TTSは現状ファイル参照に非対応なので、先にローダー更新が必要。旧`.env`を先に消さない |
+| OpenAI | WKFL直下`.env`の`OPENAI_API_KEY`を読む記事生成コード（登録有無未確認） | `~/.secrets/wkfl/openai-token`候補と`OPENAI_API_KEY_FILE`対応を将来追加 | 記事生成にも使うため、Labだけの都合で失効・置換しない。GitHub Secretsは別途維持 |
+| Anthropic | WKFL直下`.env`の`ANTHROPIC_API_KEY`を読む記事生成・要約コード（登録有無未確認） | `~/.secrets/wkfl/anthropic-token`候補と`ANTHROPIC_API_KEY_FILE`対応を将来追加 | ニュース要約の独自パース／環境変数上書きも同時整理が必要。Renderの設定は別途維持 |
+| fal | コード上で`~/.secrets/fal-token`を参照済み | 移行対象外。既存の用途別参照を維持 | 新Labは使わないため読み込まない |
+| ElevenLabs / Cartesia | 新Labには資格情報・接続実装なし | 今回は保存先の作成・キー登録をしない | 接続追加時に用途・課金先と共に決める |
+
+次に確認する具体事項は「WKFLのGoogleキーの現用保存先」「そのキーが専用か共用か」「移行先」の3点です。確認後も、秘密値移動・権限600設定・永続的なパス登録・旧`.env`キー削除を実行する直前に対象操作を提示します。今回行ったのはソースと移行案のみで、秘密ファイルに触れていません。
