@@ -10,7 +10,7 @@ export const catalog = {
     models: ['gemini-3.8-live'],
     voices: ['Kore', 'Puck', 'Charon', 'Aoede'],
     source: 'https://ai.google.dev/gemini-api/docs/live-api/capabilities#change-voice-and-language',
-    status: '公式Liveガイドの対応記載に基づく候補。モデル別の接続・声質は未検証。TTSとの同一声質は保証しません。',
+    status: 'gemini-3.8-live / Koreは1回の接続と最初の音声チャンク受信を確認。マイク会話・声質・他の声は未検証。TTSとの同一声質は保証しません。',
   },
 };
 export const sampleText = 'こんにちは、WKFLです。同じ言葉でも、声と間の取り方で印象は変わります。今日は、日本語の自然さと聞き取りやすさを比べてみましょう。';

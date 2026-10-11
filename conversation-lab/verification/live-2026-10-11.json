@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-11T02:03:39.017Z",
+  "model": "gemini-3.8-live",
+  "voice": "Kore",
+  "attemptCount": 1,
+  "textRequestsSent": 1,
+  "connected": true,
+  "setupComplete": true,
+  "audioReceived": true,
+  "audioBytes": 2,
+  "microphoneUsed": false,
+  "cost": null,
+  "usage": [],
+  "result": "audio-received-and-closed",
+  "centralReferenceVerified": true,
+  "limitation": "Only the first 2-byte PCM chunk was received before closing; complete speech, playback and microphone were not validated."
+}

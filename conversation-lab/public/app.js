@@ -36,7 +36,7 @@ function cleanup() {
   clearTimeout(flushTimer); capture?.disconnect(); source?.disconnect(); playbackBus?.disconnect(); stream?.getTracks().forEach(track => track.stop());
   if (context && context.state !== 'closed') context.close().catch(() => {});
   capture = source = playbackBus = stream = context = null;
-  $('talk').textContent = cfg?.mock ? 'モック発話を送る' : '話し始める'; $('talk').classList.remove('recording');
+  $('talk').textContent = cfg?.mock ? 'デモ音を再生（会話ではありません）' : '話し始める'; $('talk').classList.remove('recording');
   $('countdown').textContent = '—';
 }
 function flushRecording() {
@@ -135,8 +135,8 @@ $('live-start').onclick = async () => {
         liveReady = true; deadline = Date.now() + message.seconds * 1000; $('transcript').replaceChildren();
         countdownTimer = setInterval(() => { $('countdown').textContent = Math.max(0, Math.ceil((deadline - Date.now()) / 1000)); }, 250);
         if (!cfg.mock && $('turn-mode').value === 'automatic') { capture.port.postMessage('start'); $('talk').textContent = 'マイク送信中'; }
-        $('latency').textContent = $('turn-mode').value === 'automatic' ? '自然会話：音声の区切りはサーバーが検出します。発話終了から実再生までの遅延は未計測です。' : '手動区切り：発話終了通知 → 最初の音声受信（サーバー）を計測します。';
-        status(cfg.mock ? 'MOCK接続。マイクは使いません。合成テスト音を送れます。' : $('turn-mode').value === 'automatic' ? '接続しました。そのまま話してください。マイク送信中です。' : '接続しました。「話し始める」でマイク送信を開始します。'); controls();
+        $('latency').textContent = cfg.mock ? 'デモ用のタイマーです。AIは応答しません。音声会話や応答速度の測定はできません。' : $('turn-mode').value === 'automatic' ? '自然会話：音声の区切りはサーバーが検出します。発話終了から実再生までの遅延は未計測です。' : '手動区切り：発話終了通知 → 最初の音声受信（サーバー）を計測します。';
+        status(cfg.mock ? 'デモ確認中です。会話はできません。「デモ音を再生」で合成テスト音だけを確認できます。' : $('turn-mode').value === 'automatic' ? '接続しました。そのまま話してください。マイク送信中です。' : '接続しました。「話し始める」でマイク送信を開始します。'); controls();
       }
       if (message.type === 'audio') playAudio(message.data);
       if (message.type === 'drain') flushRecording();
@@ -170,15 +170,32 @@ try {
     for (const [suffix, values] of [['model', cfg.catalog[kind].models], ['voice', cfg.catalog[kind].voices]]) for (const value of values) { const option = document.createElement('option'); option.value = value; option.textContent = value; $(`${kind}-${suffix}`).append(option); }
     for (const model of cfg.catalog[kind].models) {
       const button = document.createElement('button'); button.dataset.model = model; button.textContent = model;
-      const small = document.createElement('small'); small.textContent = kind === 'live' ? '自然会話 / 接続実装済み・未試験' : '読み上げ / 接続実装済み・未試験';
+      const small = document.createElement('small'); small.textContent = cfg.mock ? 'デモ表示のみ / AI未接続' : kind === 'live' ? 'Live接続確認済み / マイク未検証' : '実API接続 / 読み上げ・未試験';
       button.append(small); button.onclick = () => selectModel(kind, model); $('models').append(button);
     }
     $(`${kind}-model`).onchange = () => selectModel(kind, $(`${kind}-model`).value);
     $(`${kind}-note`).textContent = cfg.catalog[kind].status;
   }
-  $('text').value = cfg.sampleText; $('mode').textContent = cfg.mock ? 'MOCK / 課金なし' : 'LOCAL / API使用';
+  $('text').value = cfg.sampleText; $('mode').textContent = cfg.mock ? 'デモ / AI未接続' : '実接続 / API課金あり';
+  $('mode-notice').textContent = cfg.mock ? 'デモモード：AIには接続しません。音声会話はできません。料金は発生しません。' : '実接続モード：音声の生成・会話の開始操作からAPI料金が発生します。Liveの接続のみ確認済み。マイク会話・声質・実額は未検証です。';
+  $('mode-notice').classList.toggle('api-mode', !cfg.mock);
+  $('models-note').textContent = cfg.mock ? '一覧は画面確認用です。選択しても各モデルには接続しません。' : 'Liveの接続は確認済み。マイクでの会話・TTS生成は未確認です。生成・開始操作から課金対象になります。';
   $('credentials').textContent = `資格情報の参照方式：${cfg.credentialSource}（値は表示しません）`;
-  if (cfg.mock) { for (const node of document.querySelectorAll('.api-notice')) node.textContent = 'MOCK：外部API・マイクを使いません。保存されるのは合成テスト音です。'; $('talk').textContent = 'モック発話を送る'; }
-  status(cfg.mock ? 'モックモードです。声質・反応速度の実測比較には使えません。' : '準備できました。生成・接続はボタンを押したときだけ実行します。');
+  if (cfg.mock) {
+    for (const node of document.querySelectorAll('.api-notice')) node.textContent = 'デモの動作確認です。外部API・マイクは使わず、保存されるのは合成テスト音です。';
+    $('live-start').textContent = 'デモの動作を確認';
+    $('talk').textContent = 'デモ音を再生（会話ではありません）';
+    $('live-stop').textContent = 'デモを終了・保存';
+    $('generate').textContent = 'デモ音を1回保存';
+    $('live-title').textContent = '音声UIのデモ';
+    $('live-subtitle').textContent = 'DEMO / AIとの会話はできません';
+    $('seconds-label').textContent = 'デモ時間（既定60秒・最大180秒）';
+    $('live-note').textContent = 'モデル・声は画面確認用の選択肢です。実際の音声会話には接続しません。';
+    $('tts-note').textContent = 'この声での読み上げは行いません。合成テスト音だけを保存します。';
+    $('turn-mode').hidden = true;
+    document.querySelector('label[for="turn-mode"]').hidden = true;
+    $('latency').textContent = 'AI応答・会話・反応速度の計測はありません。デモのタイマーと保存だけを確認できます。';
+  }
+  status(cfg.mock ? '現在はデモです。AIとの会話を開始するボタンではありません。' : '準備できました。生成・接続はボタンを押したときだけ実行します。');
   selectModel(selectedKind, selectedModel); controls();
 } catch (error) { status(`読み込みに失敗しました：${error.message}`, true); }
