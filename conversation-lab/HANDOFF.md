@@ -55,7 +55,7 @@ Gemini 3.8 Liveのみ上部に公式料金とトークン例、下部に日本�
 - **設定の保存**：最後の設定と名前付きの設定はブラウザの localStorage（`conversation-lab.studio.v1`）。消えても困らない前提。
 - **収録の保存**：通常の会話記録と同じ `data/experiments/` に `studio`（番組名・テーマ・ゲスト名）付きで保存し、ページ下の「収録した番組」に音声（mix.wav）と文字起こしを出す。履歴の自動整理は、同じモデルでもモデル検証の記録とは別枠で新しい5本を残す。
 - **共通化**：マイク・再生・録音・接続は `public/live-session.js`、文字起こし表示や終了理由の表記は `public/shared.js` にまとめ、両ページで使う。
-- **確認状態**：テスト（外部通信なし）と、デモモードの別ポートでの自動ブラウザ操作（両ページの開始→合図→停止→保存、設定の保存と復元、スマホ幅のはみ出しなし）まで。実際のAIとのインタビューは未実施で、指示文の効き方（質問の掘り下げ方、締めの合図への反応）はこれから調整する。
+- **確認状態**：テスト（外部通信なし）と、デモモードの別ポートでの自動ブラウザ操作（両ページの開始→合図→停止→保存、設定の保存と復元、スマホ幅のはみ出しなし）。実収録は2026-10-12に2回（どちらも gemini-3.8-live・Aoede）。1回目（「番組らしい話し方」を足す前の指示文、41秒）はぎこちなかった。2回目（足した後の指示文、人格「落ち着いた聞き手」・聞き方「深掘り」、297秒、約13円）は話が盛り上がり、ユーザーの評価は「これが一つの正解」。聞き手として最有力は Gemini 3.8 Live（GPT-Live より声が自然で応答が速く、安い）。未確認：「締めに入ってもらう」の合図（2回とも未使用）、GPT-Live・Realtime での番組づくり、10分を超える収録。
 
 ## ビジョンと将来要望（ユーザー提示・未着手）
 
@@ -134,7 +134,7 @@ Gemini 3.8 Liveのみ上部に公式料金とトークン例、下部に日本�
 - **未確認**: Gemini Live での全声・自然な割込み、Flash-Lite TTS、GPT-Live の委任の質（いつ委任するかの指示の調整）、gpt-6-sol との比較。
 
 次の候補（ユーザーと合意済みの方向）:
-1. **題材の受け渡しとAI司会**: 会話の画面に「題材」欄（記事の本文またはURL）を足し、開始時の指示文に題材と「AIが司会として進める」指示を入れる。Gemini・Realtime・GPT-Live で共通に使う。URLの本文取得はWKFLの記事生成の取得処理（`app/engine/synthesize_articles.py`）を流用できる。GPT-Live の指示文は最大16,384トークン、会話中の追加は `session.thinking.append`（黙って渡す）/ `session.commentary.append`（言い換えて話させる）/ `session.instructions.append` で各500トークンまで。
+1. **方向性（2026-10-12、ユーザー判断）**: このラボは「受動的な発信」を誰でも体験できるものを目指す（[CONCEPT.md](CONCEPT.md)）。WKFLの記事を深掘りする番組は、このラボではなく個別のプロジェクトに知見を応用して作る。AIが司会（ホスト）として進める部分は番組づくりページで実現済み。以下は以前の「題材の受け渡し」の検討メモで、WKFL側で使える：URLの本文取得はWKFLの記事生成の取得処理（`app/engine/synthesize_articles.py`）を流用できる。GPT-Live の指示文は最大16,384トークン、会話中の追加は `session.thinking.append`（黙って渡す）/ `session.commentary.append`（言い換えて話させる）/ `session.instructions.append` で各500トークンまで。
 2. **画像（Xの画面など）**: GPT-Live は画像・動画の入力に非対応。Gemini 3.8 Live は画像・動画入力に対応（料金表に単価あり）。GPT-Live では、委任先に画像を渡すか、画像を先に文章化して渡す方法が考えられる（未検証）。
 3. GPT-Live の委任先に Web 検索を付けるか（1回約1.6円＋検索内容のトークン代）。
 4. 声ごとのユースケース表示（`catalog-sources/` の Gemini API データの persona / context / 説明文を根拠に）。
@@ -142,4 +142,4 @@ Gemini 3.8 Liveのみ上部に公式料金とトークン例、下部に日本�
 
 引き継ぎ開始文：
 
-> WKFL/conversation-lab の README、HANDOFF.md、CREDENTIALS.md とプロジェクトの AGENTS.md を読んで続けてください。声カタログ、Gemini Live・OpenAI Realtime・GPT-Live の会話、料金の概算まで実装済みで、OpenAI の請求とも一致を確認しています。キーは ~/.secrets/wkfl/ にあります（対応表は ~/playbooks/gemini-tts.md と ~/playbooks/openai-api-keys.md）。次は「題材の受け渡しとAI司会」から始める予定です。課金を伴う生成は、ユーザーの依頼の範囲で行ってください。
+> WKFL/conversation-lab の README、HANDOFF.md、CREDENTIALS.md とプロジェクトの AGENTS.md を読んで続けてください。声カタログ、Gemini Live・OpenAI Realtime・GPT-Live の会話、料金の概算、番組づくりページ（AIホストのインタビュー）まで実装済みです。目指す方向は CONCEPT.md（受動的な発信）にあります。キーは ~/.secrets/wkfl/ にあります（対応表は ~/playbooks/gemini-tts.md と ~/playbooks/openai-api-keys.md）。課金を伴う生成は、ユーザーの依頼の範囲で行ってください。

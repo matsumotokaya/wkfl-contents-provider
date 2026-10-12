@@ -2,7 +2,7 @@
 
 自分用・ローカル専用の日本語音声研究。モデル一覧 → 会話／読み上げ → 選択モデルの履歴、の小さなWebサイトです。
 
-仕様・構成・確認状態・残件は [HANDOFF.md](HANDOFF.md)、資格情報は [CREDENTIALS.md](CREDENTIALS.md) が正本です。
+仕様・構成・確認状態・残件は [HANDOFF.md](HANDOFF.md)、資格情報は [CREDENTIALS.md](CREDENTIALS.md)、目指す方向（受動的な発信）は [CONCEPT.md](CONCEPT.md) が正本です。
 
 ## 起動
 
