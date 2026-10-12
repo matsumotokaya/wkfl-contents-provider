@@ -14,6 +14,7 @@ import { pcmFromBase64 } from './lib/audio.mjs';
 import { Timeline } from './lib/timeline.mjs';
 import { Store } from './lib/store.mjs';
 import { summarizeLive } from './lib/cost.mjs';
+import { TranscriptGrouper } from './lib/transcript.mjs';
 import { demoSettings, demoSets, publicDemoSettings, readDemos } from './lib/voice-demos.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -98,6 +99,7 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
         res.setHeader('Content-Type', 'audio/wav'); res.end(readFileSync(path)); return;
       }
       if (req.method === 'GET' && pathname === '/cost.mjs') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end(readFileSync(join(root, 'lib/cost.mjs'))); return; }
+      if (req.method === 'GET' && pathname === '/transcript.mjs') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end(readFileSync(join(root, 'lib/transcript.mjs'))); return; }
       if (req.method === 'GET' && pathname === '/snippets.mjs') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end(readFileSync(join(root, 'lib/snippets.mjs'))); return; }
       const files = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript'], '/audio-worklet.js': ['audio-worklet.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
       if (req.method === 'GET' && files[pathname]) {
@@ -130,11 +132,17 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
       if (counts[event.type] <= cap) item.events.push(event);
       else if (counts[event.type] === cap + 1) item.events.push({ type: 'log-capped', of: event.type, cap, atMs: now() });
     };
-    const transcript = (role, text) => {
-      const last = item.events.at(-1);
-      if (last?.type === 'transcript' && last.role === role) { last.text += text; last.untilMs = now(); }
-      else item.events.push({ type: 'transcript', atMs: now(), role, text });
-      send({ type: 'transcript', role, text });
+    // Fragments are grouped into speaker lines here (lib/transcript.mjs); stored events are those
+    // lines and the browser only renders them. Times: the provider's speech times when sent
+    // (GPT-Live), the speech start for Realtime's late user transcript, else arrival.
+    const grouper = new TranscriptGrouper();
+    const transcript = (role, part) => {
+      const t = now();
+      const startMs = Number.isFinite(part.startMs) ? part.startMs : Number.isFinite(part.spokenAt) ? Math.round(part.spokenAt - started) : t;
+      const endMs = Number.isFinite(part.endMs) ? part.endMs : t;
+      const { line, created } = grouper.add(role, part.text, startMs, endMs);
+      if (created) item.events.push(Object.assign(line, { type: 'transcript' }));
+      send({ type: 'transcript', index: line.index, role, text: part.text, atMs: line.atMs, untilMs: line.untilMs });
     };
     // Audio streams to disk as it arrives; the bound only sizes the longest allowed session plus the drain grace.
     const timeline = new Timeline((Math.ceil(maxSessionMs / 1000) + 2) * 16000);
@@ -222,8 +230,8 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
           if (ws.bufferedAmount > 4 * 1024 * 1024) { log({ type: 'browser-backlog', atMs: t }, 5); continue; }
           send({ type: 'audio', data: pcm.toString('base64') });
         }
-        for (const [field, role] of [['inputTranscription', 'user'], ['outputTranscription', 'model']]) if (c[field]?.text) transcript(role, c[field].text);
-        if (c.turnComplete) send({ type: 'turnComplete' });
+        for (const [field, role] of [['inputTranscription', 'user'], ['outputTranscription', 'model']]) if (c[field]?.text) transcript(role, c[field]);
+        if (c.turnComplete) { grouper.close('model'); send({ type: 'turnComplete' }); }
       } catch (error) { log({ type: 'provider-data-error', atMs: now(), error: String(error?.message).slice(0, 200) }, 20); }
     };
     const open = (connectSettings, initial = false) => {
@@ -288,7 +296,7 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
         if (draining) return;
         if (message.type === 'start' && !item) {
           settings = validate('live', message);
-          item = store.begin('live', settings, mock); item.transport = transport; started = performance.now();
+          item = store.begin('live', settings, mock); item.transport = transport; item.transcriptFormat = 'speaker-lines-v1'; started = performance.now();
           const openai = settings.provider === 'openai' || settings.provider === 'openai-live';
           key = mock ? null : openai ? loadOpenAIKey() : loadGoogleKey({ repoRoot: join(root, '..') });
           limitTimer = setTimeout(() => requestFinish('time-limit'), Math.min(settings.seconds * 1000, maxSessionMs));

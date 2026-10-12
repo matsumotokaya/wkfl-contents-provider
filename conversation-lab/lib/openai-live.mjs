@@ -15,11 +15,13 @@ export function toLiveEvents(message) {
   if (typeof input.text === 'string') return [{ type: 'session.instructions.append', content: input.text, delegation_id: null }];
   return [];
 }
+// Transcript deltas carry approximate speech times; the docs say to group by them, not by arrival.
+const speechTimes = event => (Number.isFinite(event.start_ms) && Number.isFinite(event.end_ms) ? { startMs: event.start_ms, endMs: event.end_ms } : {});
 export function fromLiveEvent(event) {
   switch (event.type) {
     case 'session.output_audio.delta': return { serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: event.delta } }] } } };
-    case 'session.input_transcript.delta': return { serverContent: { inputTranscription: { text: event.delta } } };
-    case 'session.output_transcript.delta': return { serverContent: { outputTranscription: { text: event.delta } } };
+    case 'session.input_transcript.delta': return { serverContent: { inputTranscription: { text: event.delta, ...speechTimes(event) } } };
+    case 'session.output_transcript.delta': return { serverContent: { outputTranscription: { text: event.delta, ...speechTimes(event) } } };
     // Cumulative voice seconds (snapshots, not increments).
     case 'session.usage.updated': case 'session.closed': return event.usage ? { providerUsage: { source: 'openai-live-voice', value: { ...event.usage, final: event.type === 'session.closed', reason: event.reason } } } : null;
     case 'session.delegation.created': return { providerEvent: { name: 'delegation-created', target: event.delegation?.target ?? null } };

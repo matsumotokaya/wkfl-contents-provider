@@ -30,6 +30,9 @@ export function fromRealtimeEvent(event) {
 export function connectRealtime(settings, callbacks, { key, Socket = WebSocket }) {
   const ws = new Socket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(settings.model)}`, { headers: { Authorization: `Bearer ${key}` }, handshakeTimeout: 15000, maxPayload: 8 * 1024 * 1024 });
   let closed = false, configured = false;
+  // The user's transcript arrives after the model has begun replying. speech_started and the
+  // finished transcription share an item_id, so the line is placed where the speech began.
+  const speechStarts = new Map();
   ws.on('open', () => { if (!closed) ws.send(JSON.stringify(realtimeSessionUpdate(settings))); });
   ws.on('message', data => {
     if (closed) return;
@@ -37,7 +40,13 @@ export function connectRealtime(settings, callbacks, { key, Socket = WebSocket }
       const event = JSON.parse(data.toString());
       if (event.type === 'error') return callbacks.error({ detail: redactProviderBody(JSON.stringify(event.error)).slice(0, 500) });
       if (event.type === 'session.updated' && !configured) { configured = true; callbacks.ready(); return; }
+      if (event.type === 'input_audio_buffer.speech_started' && event.item_id) {
+        speechStarts.set(event.item_id, performance.now());
+        if (speechStarts.size > 50) speechStarts.delete(speechStarts.keys().next().value);
+      }
       const message = fromRealtimeEvent(event);
+      const spoken = message?.serverContent?.inputTranscription;
+      if (spoken && speechStarts.has(event.item_id)) { spoken.spokenAt = speechStarts.get(event.item_id); speechStarts.delete(event.item_id); }
       if (message) callbacks.message(message);
     } catch { callbacks.error({ detail: 'Unreadable provider message' }); }
   });

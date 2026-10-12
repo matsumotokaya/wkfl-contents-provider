@@ -216,18 +216,26 @@ test('long input is counted, not logged, and only the time limit ends the sessio
   assert.equal(item.events.filter(e => e.type === 'input-chunk' || e.type === 'server-error').length, 0);
   ws.terminate();
 });
-test('transcript fragments are stored per speaker run; malformed provider audio is logged, not fatal', async t => {
+test('transcript fragments are stored as speaker lines by speech time; malformed provider audio is logged, not fatal', async t => {
   let callbacks;
   const provider = { synthesize, connectLive: (_settings, cb) => { callbacks = cb; setTimeout(() => cb.ready(), 5); return { send() {}, close() {} }; } };
   const f = await fixture(t, { provider }); const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
+  const indexes = []; ws.on('message', data => { const m = JSON.parse(data.toString()); if (m.type === 'transcript') indexes.push(m.index); });
   ws.send(JSON.stringify({ ...start, mode: 'automatic' })); await next('ready');
-  for (const text of ['こん', 'にちは']) callbacks.message({ serverContent: { outputTranscription: { text } } });
-  callbacks.message({ serverContent: { inputTranscription: { text: 'はい' } } });
-  callbacks.message({ serverContent: { outputTranscription: { text: 'では' } } });
+  const say = (field, text, startMs, endMs) => callbacks.message({ serverContent: { [field]: { text, startMs, endMs } } });
+  say('outputTranscription', 'こん', 0, 200); say('outputTranscription', 'にちは。', 200, 600);
+  say('inputTranscription', 'アプリを作ったんですけ', 1500, 3000);
+  say('outputTranscription', 'うん', 3010, 3100);     // a backchannel while the user is mid-word
+  say('inputTranscription', 'ど', 3020, 3200);
+  say('outputTranscription', '。', 3100, 3100);       // punctuation arriving on its own
+  say('outputTranscription', 'どんなアプリですか?', 3600, 5000);
   callbacks.message({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/mpeg', data: 'AAAA' } }] } } });
-  await next('transcript');
+  await new Promise(resolve => setTimeout(resolve, 20));
   ws.send(JSON.stringify({ type: 'stop' })); const { item } = await next('saved');
-  assert.deepEqual(item.events.filter(e => e.type === 'transcript').map(e => [e.role, e.text]), [['model', 'こんにちは'], ['user', 'はい'], ['model', 'では']]);
+  assert.equal(item.transcriptFormat, 'speaker-lines-v1');
+  assert.deepEqual(item.events.filter(e => e.type === 'transcript').map(e => [e.role, e.text]),
+    [['model', 'こんにちは。'], ['user', 'アプリを作ったんですけど'], ['model', 'うん。どんなアプリですか?']]);
+  assert.deepEqual(indexes, [0, 0, 1, 2, 1, 2, 2]);
   assert.equal(item.endReason, 'stopped');
   assert.equal(item.events.find(e => e.type === 'provider-data-error').error, 'Unexpected audio format');
   ws.terminate();

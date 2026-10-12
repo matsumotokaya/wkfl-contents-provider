@@ -1,5 +1,6 @@
 import { summarizeLive, pricingByModel } from '/cost.mjs';
 import { voiceSnippets, openaiVoiceSnippets, gptLiveVoiceSnippets } from '/snippets.mjs';
+import { groupTranscript, toBlocks } from '/transcript.mjs';
 const $ = id => document.getElementById(id);
 let selectedKind = 'live', selectedModel = 'gemini-3.8-live';
 let cfg, busy = false, socket, context, stream, capture, source, playbackBus;
@@ -55,27 +56,31 @@ function flushRecording() {
   } else { cleanup(); send({ type: 'stop' }); }
   controls();
 }
-// Google streams transcription a few characters at a time; one speaker's fragments form one line until the turn ends.
-let transcriptLine = null;
-function addTranscript(role, text) {
-  const box = $('transcript');
-  if (!transcriptLine || transcriptLine.role !== role) {
-    box.querySelector('.muted')?.remove();
-    const p = document.createElement('p'), who = document.createElement('span'), body = document.createElement('span');
-    p.className = `line ${role}`; who.className = 'who'; who.textContent = role === 'user' ? '自分' : 'モデル';
-    p.append(who, body); box.append(p); transcriptLine = { role, body };
-  }
-  transcriptLine.body.textContent += text;
-  box.scrollTop = box.scrollHeight;
+// The server groups transcript fragments into speaker lines (lib/transcript.mjs) and sends each
+// fragment with its line index; the view renders paragraphs, at most a few times a second.
+let transcriptLines = [], transcriptTimer = null;
+function resetTranscript() { transcriptLines = []; clearTimeout(transcriptTimer); transcriptTimer = null; $('transcript').replaceChildren(); }
+function addTranscript(message) {
+  if (!Number.isInteger(message.index) || message.index < 0) return;
+  const line = transcriptLines[message.index] ??= { role: message.role, text: '', atMs: message.atMs, untilMs: message.untilMs };
+  line.text += message.text; line.atMs = message.atMs; line.untilMs = message.untilMs;
+  transcriptTimer ??= setTimeout(renderTranscript, 200);
 }
-function mergeTranscript(events) {
-  const lines = [];
-  for (const event of events) {
-    if (event.type !== 'transcript') continue;
-    if (lines.at(-1)?.role === event.role) lines.at(-1).text += event.text; else lines.push({ role: event.role, text: event.text });
-  }
-  return lines;
+function renderTranscript() {
+  transcriptTimer = null;
+  const box = $('transcript'), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.querySelector('.muted')?.remove();
+  const blocks = toBlocks(transcriptLines), rows = box.querySelectorAll('p.line');
+  blocks.forEach((block, i) => {
+    let p = rows[i];
+    if (!p) { p = document.createElement('p'); const who = document.createElement('span'), body = document.createElement('span'); who.className = 'who'; p.append(who, body); box.append(p); }
+    p.className = `line ${block.role}`; p.firstChild.textContent = block.role === 'user' ? '自分' : 'モデル'; p.lastChild.textContent = block.text;
+  });
+  for (let i = blocks.length; i < rows.length; i++) rows[i].remove();
+  if (atBottom) box.scrollTop = box.scrollHeight;
 }
+// History: sessions from 2026-10-12 store grouped lines; older ones store fragments and are grouped here.
+const savedTranscript = item => toBlocks(item.transcriptFormat === 'speaker-lines-v1' ? (item.events || []).filter(e => e.type === 'transcript') : groupTranscript(item.events));
 const modalityLabel = { TEXT: 'テキスト', AUDIO: '音声', IMAGE: '画像', VIDEO: '動画', UNCLASSIFIED: '内訳なし', THINKING: 'thinking', CACHED_TEXT: 'テキスト（キャッシュ）', CACHED_AUDIO: '音声（キャッシュ）', TRANSCRIPTION: '文字起こし' };
 const money = (usdValue, fx) => usdValue === null ? '不明' : `$${usdValue.toFixed(4)}（約${(usdValue * fx.usdJpy).toLocaleString('ja-JP', { maximumFractionDigits: 2 })}円）`;
 const tokens = value => (value ?? 0).toLocaleString('ja-JP');
@@ -309,7 +314,7 @@ async function refresh() {
     info.append(h, model, meta, condition);
     if (item.mock) { const cost = document.createElement('p'); cost.textContent = '合成テスト音・課金なし・実測比較対象外'; info.append(cost); }
     info.append(costView(item));
-    if (item.kind === 'live') { const log = document.createElement('details'), title = document.createElement('summary'); title.textContent = '保存済み対話ログ'; log.append(title); for (const line of mergeTranscript(item.events || [])) { const p = document.createElement('p'); p.textContent = `${line.role === 'user' ? '自分' : 'モデル'}：${line.text}`; log.append(p); } media.append(log); }
+    if (item.kind === 'live') { const log = document.createElement('details'), title = document.createElement('summary'); title.textContent = '保存済み対話ログ'; log.append(title); for (const line of savedTranscript(item)) { const p = document.createElement('p'); p.textContent = `${line.role === 'user' ? '自分' : 'モデル'}：${line.text}`; log.append(p); } media.append(log); }
     if (item.kind === 'live') { const recording = document.createElement('p'); recording.textContent = item.recording?.schema === 'browser-render-timeline-v1' ? item.recording.complete ? '時間軸を保持した録音 / ブラウザ描画音' : '録音は一部欠損・終了フラッシュ未確認。詳細を確認してください。' : '旧形式：無音を詰めた非同期録音'; info.append(recording); }
     if (item.text) { const text = document.createElement('p'); text.textContent = item.text; media.append(text); }
     for (const file of item.files) {
@@ -372,7 +377,7 @@ $('live-start').onclick = async () => {
         capture.port.postMessage('record');
         const apiMinutes = cfg.catalog.live.sessionLimits?.[$('live-model').value]?.minutes;
         const limitSeconds = apiMinutes ? Math.min(message.seconds, apiMinutes * 60) : message.seconds;
-        liveReady = true; deadline = Date.now() + limitSeconds * 1000; $('transcript').replaceChildren(); transcriptLine = null; $('session-summary').replaceChildren();
+        liveReady = true; deadline = Date.now() + limitSeconds * 1000; resetTranscript(); $('session-summary').replaceChildren();
         countdownTimer = setInterval(() => { const s = Math.max(0, Math.ceil((deadline - Date.now()) / 1000)); $('countdown').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }, 250);
         if (!cfg.mock && $('turn-mode').value === 'automatic') { capture.port.postMessage('start'); $('talk').textContent = 'マイク送信中'; }
         $('latency').textContent = cfg.mock ? 'デモ用のタイマーです。AIは応答しません。音声会話や応答速度の測定はできません。' : $('turn-mode').value === 'automatic' ? '自然会話：音声の区切りはサーバーが検出します。発話終了から実再生までの遅延は未計測です。' : '手動区切り：発話終了通知 → 最初の音声受信（サーバー）を計測します。';
@@ -380,9 +385,8 @@ $('live-start').onclick = async () => {
       }
       if (message.type === 'audio') playAudio(message.data);
       if (message.type === 'drain') flushRecording();
-      if (message.type === 'interrupted') { stopPlayback(); transcriptLine = null; }
-      if (message.type === 'transcript') addTranscript(message.role, message.text);
-      if (message.type === 'turnComplete') transcriptLine = null;
+      if (message.type === 'interrupted') stopPlayback();
+      if (message.type === 'transcript') addTranscript(message);
       if (message.type === 'metric') $('latency').textContent = `${cfg.mock ? 'MOCK / ' : ''}発話終了通知 → 最初の音声受信（サーバー）：${message.metric.value} ms。実再生開始の遅延ではありません。`;
       if (message.type === 'error') status(message.message, true);
       if (message.type === 'saved') { $('session-summary').replaceChildren(costView(message.item)); status('録音を保存しました。' + endLabel(message.item.endReason) + '。'); refresh().catch(error => status(error.message, true)); }

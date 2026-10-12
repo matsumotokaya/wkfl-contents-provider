@@ -28,6 +28,7 @@ test('server messages and GPT-Live events translate both ways', () => {
   assert.equal(fromLiveEvent({ type: 'session.output_audio.delta', delta: 'AAAA' }).serverContent.modelTurn.parts[0].inlineData.data, 'AAAA');
   assert.equal(fromLiveEvent({ type: 'session.input_transcript.delta', delta: 'こん' }).serverContent.inputTranscription.text, 'こん');
   assert.equal(fromLiveEvent({ type: 'session.output_transcript.delta', delta: 'はい' }).serverContent.outputTranscription.text, 'はい');
+  assert.deepEqual(fromLiveEvent({ type: 'session.input_transcript.delta', delta: 'ど', start_ms: 1200, end_ms: 1350 }).serverContent.inputTranscription, { text: 'ど', startMs: 1200, endMs: 1350 });
   assert.deepEqual(fromLiveEvent({ type: 'session.closed', reason: 'close_requested', usage: { seconds: 61 } }).providerUsage, { source: 'openai-live-voice', value: { seconds: 61, final: true, reason: 'close_requested' } });
   assert.equal(fromLiveEvent({ type: 'session.usage.updated', usage: { seconds: 30 } }).providerUsage.value.final, false);
   assert.equal(fromLiveEvent({ type: 'session.delegation.created', delegation: { target: 'responses' } }).providerEvent.name, 'delegation-created');
