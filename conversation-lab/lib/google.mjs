@@ -45,6 +45,10 @@ export function liveSetup(settings) {
     ...liveVoiceSetup({ model: settings.model, voice: settings.voice, instruction: `日本語で短く自然に対話してください。${settings.condition}` }),
     realtimeInputConfig: { automaticActivityDetection: settings.mode === 'manual' ? { disabled: true } : { disabled: false, silenceDurationMs: 700 } },
     inputAudioTranscription: {}, outputAudioTranscription: {},
+    // Official session management: compression lifts the 15-minute audio-only limit; resumption
+    // lets the server continue the same session on a new connection (connections end after ~10 min).
+    contextWindowCompression: { slidingWindow: {} },
+    sessionResumption: settings.resumeHandle ? { handle: settings.resumeHandle } : {},
   } };
 }
 export function connectLive(settings, callbacks, { key, mock }) {

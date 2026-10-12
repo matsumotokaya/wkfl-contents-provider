@@ -122,6 +122,15 @@ function costView(item) {
   return box;
 }
 
+// What the provider itself allows per session, so a cut by the API is never mistaken for a fault here.
+function renderSessionLimit(model) {
+  const limit = cfg.catalog.live.sessionLimits?.[model], box = $('live-limit');
+  box.replaceChildren();
+  if (!limit) return;
+  box.append('API の上限：' + limit.official + '。' + limit.handling + ' ', externalLink(limit.source, '公式資料'));
+}
+const endLabels = { stopped: '停止ボタンで終了', 'time-limit': '設定した上限時間で終了', 'provider-closed': 'AI側が接続を終了（APIの上限など。記録の provider-close を確認）', 'provider-error': 'AI側のエラーで終了', 'provider-unavailable': 'AI側の接続が使えず終了', 'invalid-request': 'サーバーが拒否して終了（不具合。記録を確認）', 'client-closed': 'ブラウザ側の切断で終了', 'client-unavailable': 'ブラウザが応答せず終了', 'client-error': 'ブラウザ接続のエラーで終了', 'setup-timeout': '接続の準備が時間切れ', 'invalid-provider-data': 'AI側のデータ異常で終了', 'size-limit': '保存上限で終了' };
+const endLabel = reason => endLabels[reason] || reason || '';
 function selectModel(kind, model) {
   if (busy) return;
   selectedKind = kind; selectedModel = model;
@@ -136,6 +145,7 @@ function selectModel(kind, model) {
     if (!cfg.mock) { $('turn-mode').hidden = live; document.querySelector('label[for="turn-mode"]').hidden = live; }
   }
   $(`${kind}-note`).textContent = cfg.catalog[kind].statusByModel?.[model] || cfg.catalog[kind].status;
+  if (kind === 'live') renderSessionLimit(model);
   if (renderedProvider[kind] !== providerOf(kind, model)) voiceCatalog(kind, model);
   $('tts-panel').hidden = kind !== 'tts'; $('live-panel').hidden = kind !== 'live';
   $(`${kind}-model`).value = model;
@@ -294,7 +304,7 @@ async function refresh() {
     const info = document.createElement('div'), media = document.createElement('div');
     const h = document.createElement('h3'); h.textContent = `${item.voice} / ${item.kind.toUpperCase()}${item.mock ? ' · MOCK' : ''}`;
     const model = document.createElement('p'); model.textContent = item.model;
-    const meta = document.createElement('p'); meta.className = 'meta'; meta.textContent = `${new Date(item.createdAt).toLocaleString('ja-JP')} · ${item.status}`;
+    const meta = document.createElement('p'); meta.className = 'meta'; meta.textContent = `${new Date(item.createdAt).toLocaleString('ja-JP')} · ${item.status}` + (item.endReason ? ' · ' + endLabel(item.endReason) : '');
     const condition = document.createElement('p'); condition.textContent = item.condition;
     info.append(h, model, meta, condition);
     if (item.mock) { const cost = document.createElement('p'); cost.textContent = '合成テスト音・課金なし・実測比較対象外'; info.append(cost); }
@@ -360,8 +370,10 @@ $('live-start').onclick = async () => {
       const message = JSON.parse(data);
       if (message.type === 'ready') {
         capture.port.postMessage('record');
-        liveReady = true; deadline = Date.now() + message.seconds * 1000; $('transcript').replaceChildren(); transcriptLine = null; $('session-summary').replaceChildren();
-        countdownTimer = setInterval(() => { $('countdown').textContent = Math.max(0, Math.ceil((deadline - Date.now()) / 1000)); }, 250);
+        const apiMinutes = cfg.catalog.live.sessionLimits?.[$('live-model').value]?.minutes;
+        const limitSeconds = apiMinutes ? Math.min(message.seconds, apiMinutes * 60) : message.seconds;
+        liveReady = true; deadline = Date.now() + limitSeconds * 1000; $('transcript').replaceChildren(); transcriptLine = null; $('session-summary').replaceChildren();
+        countdownTimer = setInterval(() => { const s = Math.max(0, Math.ceil((deadline - Date.now()) / 1000)); $('countdown').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }, 250);
         if (!cfg.mock && $('turn-mode').value === 'automatic') { capture.port.postMessage('start'); $('talk').textContent = 'マイク送信中'; }
         $('latency').textContent = cfg.mock ? 'デモ用のタイマーです。AIは応答しません。音声会話や応答速度の測定はできません。' : $('turn-mode').value === 'automatic' ? '自然会話：音声の区切りはサーバーが検出します。発話終了から実再生までの遅延は未計測です。' : '手動区切り：発話終了通知 → 最初の音声受信（サーバー）を計測します。';
         status(cfg.mock ? 'デモ確認中です。会話はできません。「デモ音を再生」で合成テスト音だけを確認できます。' : $('turn-mode').value === 'automatic' ? '接続しました。そのまま話してください。マイク送信中です。' : '接続しました。「話し始める」でマイク送信を開始します。'); controls();
@@ -373,7 +385,7 @@ $('live-start').onclick = async () => {
       if (message.type === 'turnComplete') transcriptLine = null;
       if (message.type === 'metric') $('latency').textContent = `${cfg.mock ? 'MOCK / ' : ''}発話終了通知 → 最初の音声受信（サーバー）：${message.metric.value} ms。実再生開始の遅延ではありません。`;
       if (message.type === 'error') status(message.message, true);
-      if (message.type === 'saved') { $('session-summary').replaceChildren(costView(message.item)); status(`録音を保存しました（${message.item.endReason}）。`); refresh().catch(error => status(error.message, true)); }
+      if (message.type === 'saved') { $('session-summary').replaceChildren(costView(message.item)); status('録音を保存しました。' + endLabel(message.item.endReason) + '。'); refresh().catch(error => status(error.message, true)); }
     };
     socket.onerror = () => status('接続できませんでした。設定を確認し、必要なら手動で再開してください。', true);
     socket.onclose = () => { cleanup(); socket = null; busy = false; stopping = false; controls(); };
@@ -419,7 +431,7 @@ try {
     $('generate').textContent = 'デモ音を1回保存';
     $('live-title').textContent = '音声UIのデモ';
     $('live-subtitle').textContent = 'DEMO / AIとの会話はできません';
-    $('seconds-label').textContent = 'デモ時間（既定60秒・最大5分）';
+    $('seconds-label').textContent = 'デモ時間（使いすぎ防止の上限）';
     $('live-note').textContent = 'モデル・声は画面確認用の選択肢です。実際の音声会話には接続しません。';
     $('tts-note').textContent = 'この声での読み上げは行いません。合成テスト音だけを保存します。';
     $('turn-mode').hidden = true;

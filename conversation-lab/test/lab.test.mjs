@@ -76,11 +76,11 @@ test('manual mock dialog saves separate tracks, usage stays unknown, measured ti
   ws.send(JSON.stringify({ type: 'activityEnd' }));
   assert.equal((await next('metric')).metric.simulated, true); await next('audio');
   ws.send(JSON.stringify({ type: 'stop' })); const { item } = await next('saved');
-  assert.equal(item.status, 'completed'); assert.deepEqual(item.files, ['input-source.wav', 'generated.wav']);
+  assert.equal(item.status, 'completed'); assert.deepEqual(item.files, []);
   assert.equal(item.recording.unavailable, true);
-  assert.equal(item.events.filter(e => e.type === 'input-chunk')[0].bytes, 3200);
-  assert.equal(readFileSync(join(f.dir, item.id, 'input-source.wav')).readUInt32LE(24), 16000);
-  assert.equal(readFileSync(join(f.dir, item.id, 'generated.wav')).readUInt32LE(24), 24000);
+  // Audio is counted, not logged per chunk.
+  assert.equal(item.transport.inputBytes, 3200); assert.equal(item.transport.inputChunks, 1); assert.ok(item.transport.outputBytes > 0);
+  assert.equal(item.events.filter(e => e.type === 'input-chunk' || e.type === 'output-chunk').length, 0);
   ws.terminate();
 });
 test('automatic mode accepts continuous input and stops at the server time limit', async t => {
@@ -199,21 +199,66 @@ test('health and recording drain are local only; server keeps received audio sep
   assert.equal(output.readInt16LE(44 + 3200 * 2), 4000);
   assert.equal(output.readInt16LE(44 + 4800 * 2), 0);
   assert.equal(mix.readInt16LE(44 + 3200 * 2), 2000);
-  assert.ok(item.files.includes('generated.wav'));
+  assert.deepEqual(item.files, ['mix.wav', 'input.wav', 'output.wav']);
+  assert.equal(input.readUInt32LE(40), 6400 * 2);
   assert.equal((await request(f.url, `/experiments/${item.id}/mix.wav`)).status, 200);
   ws.terminate();
 });
-test('audio caps follow the session limit and end a session gracefully, not as invalid-request', async t => {
-  const f = await fixture(t, { maxSessionMs: 1000 }); // input cap = (1 + 5) s * 32 kB/s = 192,000 bytes
+test('long input is counted, not logged, and only the time limit ends the session', async t => {
+  const f = await fixture(t, { maxSessionMs: 400 });
   const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
   ws.send(JSON.stringify({ ...start, mode: 'automatic' })); await next('ready');
   const chunk = Buffer.alloc(3200).toString('base64');
-  for (let i = 0; i < 61; i++) ws.send(JSON.stringify({ type: 'audio', data: chunk }));
-  const error = await next('error'); assert.match(error.message, /マイク入力/);
+  for (let i = 0; i < 200; i++) ws.send(JSON.stringify({ type: 'audio', data: chunk }));
   const { item } = await next('saved');
-  assert.equal(item.endReason, 'size-limit');
+  assert.equal(item.endReason, 'time-limit');
+  assert.equal(item.transport.inputChunks, 200); assert.equal(item.transport.inputBytes, 640000);
+  assert.equal(item.events.filter(e => e.type === 'input-chunk' || e.type === 'server-error').length, 0);
+  ws.terminate();
+});
+test('transcript fragments are stored per speaker run; malformed provider audio is logged, not fatal', async t => {
+  let callbacks;
+  const provider = { synthesize, connectLive: (_settings, cb) => { callbacks = cb; setTimeout(() => cb.ready(), 5); return { send() {}, close() {} }; } };
+  const f = await fixture(t, { provider }); const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
+  ws.send(JSON.stringify({ ...start, mode: 'automatic' })); await next('ready');
+  for (const text of ['こん', 'にちは']) callbacks.message({ serverContent: { outputTranscription: { text } } });
+  callbacks.message({ serverContent: { inputTranscription: { text: 'はい' } } });
+  callbacks.message({ serverContent: { outputTranscription: { text: 'では' } } });
+  callbacks.message({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/mpeg', data: 'AAAA' } }] } } });
+  await next('transcript');
+  ws.send(JSON.stringify({ type: 'stop' })); const { item } = await next('saved');
+  assert.deepEqual(item.events.filter(e => e.type === 'transcript').map(e => [e.role, e.text]), [['model', 'こんにちは'], ['user', 'はい'], ['model', 'では']]);
+  assert.equal(item.endReason, 'stopped');
+  assert.equal(item.events.find(e => e.type === 'provider-data-error').error, 'Unexpected audio format');
+  ws.terminate();
+});
+test('a Gemini session continues on a resumed connection after GoAway or an unexpected close', async t => {
+  const connections = [];
+  const provider = { synthesize, connectLive: (settings, cb) => {
+    const c = { settings, cb, sent: [], closed: false, send(m) { if (c.closed) throw Object.assign(new Error('Live connection not open (state 3)'), { upstream: true }); c.sent.push(m); }, close() { c.closed = true; } };
+    connections.push(c); setTimeout(() => cb.ready(), 5); return c;
+  } };
+  const f = await fixture(t, { provider }); const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
+  ws.send(JSON.stringify({ ...start, mode: 'automatic' })); await next('ready');
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const [first] = connections;
+  first.cb.message({ sessionResumptionUpdate: { newHandle: 'handle-1', resumable: true } });
+  first.cb.message({ goAway: { timeLeft: '10s' } });
+  await wait(30);
+  assert.equal(connections.length, 2); assert.equal(connections[1].settings.resumeHandle, 'handle-1');
+  assert.equal(first.closed, true);
+  ws.send(JSON.stringify({ type: 'audio', data: Buffer.alloc(3200).toString('base64') }));
+  await wait(30);
+  assert.ok(connections[1].sent.some(m => m.realtimeInput?.audio));
+  connections[1].cb.message({ sessionResumptionUpdate: { newHandle: 'handle-2', resumable: true } });
+  connections[1].cb.close({ code: 1011, reason: 'Internal error' });
+  await wait(30);
+  assert.equal(connections.length, 3); assert.equal(connections[2].settings.resumeHandle, 'handle-2');
+  ws.send(JSON.stringify({ type: 'stop' })); const { item } = await next('saved');
+  assert.equal(item.endReason, 'stopped');
+  assert.deepEqual(item.events.filter(e => e.type === 'provider-reconnect').map(e => e.reason), ['goAway', 'close']);
+  assert.equal(item.events.filter(e => e.type === 'provider-resumed').length, 2);
   assert.equal(item.events.filter(e => e.type === 'server-error').length, 0);
-  assert.equal(item.events.filter(e => e.type === 'input-chunk').length, 60);
   ws.terminate();
 });
 test('recording bookkeeping problems are logged and never end the session', async t => {

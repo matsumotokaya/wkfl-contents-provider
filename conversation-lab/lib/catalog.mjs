@@ -82,6 +82,14 @@ export const catalog = {
     defaultVoiceByProvider: { google: 'Kore', openai: 'marin', 'openai-live': 'marin' },
     source: 'https://ai.google.dev/gemini-api/docs/live-api/capabilities#change-voice-and-language',
     status: 'gemini-3.8-live / Koreは1回の接続と最初の音声チャンク受信を確認。マイク会話・声質・他の声は未検証。TTSとの同一声質は保証しません。',
+    // Official per-session limits (checked 2026-10-12). The app's own limit is only a spending guard;
+    // minutes: null means the provider publishes no fixed cap (or the app lifts it by official means).
+    sessionLimits: {
+      'gemini-3.8-live': { minutes: null, official: '圧縮なしの音声セッションは15分、1本の接続は約10分で終了', handling: '本アプリは文脈圧縮とセッション再開（どちらも公式の手段）で接続を継ぎ直し、設定した上限まで会話を続けます。継ぎ直しの瞬間は数百ミリ秒の音声が落ちることがあります。', source: 'https://ai.google.dev/gemini-api/docs/live-api/session-management' },
+      'gpt-realtime-2.1': { minutes: 60, official: '1セッション最大60分', handling: '60分で OpenAI 側が接続を終えます。続きは新しい会話として始めてください。', source: 'https://developers.openai.com/api/docs/guides/realtime-conversations' },
+      'gpt-realtime-2.1-mini': { minutes: 60, official: '1セッション最大60分', handling: '60分で OpenAI 側が接続を終えます。続きは新しい会話として始めてください。', source: 'https://developers.openai.com/api/docs/guides/realtime-conversations' },
+      'gpt-live-1': { minutes: null, unknown: true, official: '上限に達すると expired で終了。分数は公開されていません', handling: '終了理由を記録します。実測で分かった時間はここに追記します。', source: 'https://developers.openai.com/api/docs/guides/live-conversations' },
+    },
     statusByModel: {
       'gemini-3.8-live': 'Google Gemini Live。マイク会話は動作確認済み。声質の評価は未実施。',
       'gpt-realtime-2.1': 'OpenAI Realtime（gpt-realtime-2.1）。実接続は未検証。',
@@ -103,7 +111,7 @@ export function validate(kind, body) {
     if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 1500) throw new Error('Text must contain 1–1500 characters');
     result.text = body.text.trim();
   } else {
-    if (!Number.isInteger(body.seconds) || body.seconds < 15 || body.seconds > 300) throw new Error('Session limit must be 15–300 seconds');
+    if (!Number.isInteger(body.seconds) || body.seconds < 15 || body.seconds > 5400) throw new Error('Session limit must be 15–5400 seconds');
     result.seconds = body.seconds;
     if (!['automatic', 'manual'].includes(body.mode)) throw new Error('Invalid turn mode');
     result.mode = body.mode;

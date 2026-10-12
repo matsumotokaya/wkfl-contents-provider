@@ -17,7 +17,7 @@ import { summarizeLive } from './lib/cost.mjs';
 import { demoSettings, demoSets, publicDemoSettings, readDemos } from './lib/voice-demos.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
-export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'mock' : 'experiments'), voiceDemoDir = join(root, 'data', 'voice-demos', demoSets.google.dirName), openaiVoiceDemoDir = join(root, 'data', 'voice-demos', demoSets.openai.dirName), historyLimit = 5, trashDir = null, maxSessionMs = 300000, provider = { synthesize, connectLive, connectRealtime, connectGptLive } } = {}) {
+export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'mock' : 'experiments'), voiceDemoDir = join(root, 'data', 'voice-demos', demoSets.google.dirName), openaiVoiceDemoDir = join(root, 'data', 'voice-demos', demoSets.openai.dirName), historyLimit = 5, trashDir = null, maxSessionMs = 90 * 60 * 1000, provider = { synthesize, connectLive, connectRealtime, connectGptLive } } = {}) {
   const store = new Store(dataDir);
   // History is kept short on purpose (user decision, 2026-10-11); older items go to the trash folder.
   const prune = () => { try { store.prune(historyLimit, trashDir); } catch { /* Retention must never break a session. */ } };
@@ -117,26 +117,34 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
   });
   wss.on('connection', ws => {
     let item, upstream, ready = false, speaking = false, done = false, pendingEnd = null;
-    let started = performance.now(), inputBytes = 0, outputBytes = 0;
-    const input = [], output = [];
-    let lastPong = performance.now();
+    let started = performance.now(), lastPong = performance.now();
     let limitTimer, drainTimer, draining = false, drainReason;
-    // Sized for the longest allowed session plus the drain grace period.
+    // Conversation first. Recording, logging and usage tracking are aids: none of them ends a
+    // session. Audio chunks are counted, not logged; transcripts are stored per speaker run;
+    // noisy event types are capped so a 90-minute record stays small.
+    const transport = { inputBytes: 0, inputChunks: 0, outputBytes: 0, outputChunks: 0, droppedInputChunks: 0 };
+    const counts = {};
+    const now = () => Math.round(performance.now() - started);
+    const log = (event, cap = 200) => {
+      counts[event.type] = (counts[event.type] || 0) + 1;
+      if (counts[event.type] <= cap) item.events.push(event);
+      else if (counts[event.type] === cap + 1) item.events.push({ type: 'log-capped', of: event.type, cap, atMs: now() });
+    };
+    const transcript = (role, text) => {
+      const last = item.events.at(-1);
+      if (last?.type === 'transcript' && last.role === role) { last.text += text; last.untilMs = now(); }
+      else item.events.push({ type: 'transcript', atMs: now(), role, text });
+      send({ type: 'transcript', role, text });
+    };
+    // Audio streams to disk as it arrives; the bound only sizes the longest allowed session plus the drain grace.
     const timeline = new Timeline((Math.ceil(maxSessionMs / 1000) + 2) * 16000);
-    // In-memory audio caps follow the session limit so the time limit always ends a
-    // session first. Microphone PCM (16 kHz) arrives in real time; providers may send
-    // output (24 kHz) ahead of real time, so that cap is twice real time. Reaching a cap
-    // ends the session gracefully. (2026-10-12: the former fixed 6 MB input cap, sized
-    // for 180 s, cut a 5-minute GPT-Live conversation at 196 s as 'invalid-request'.)
-    const capSeconds = Math.ceil(maxSessionMs / 1000) + 5;
-    const inputLimit = capSeconds * 16000 * 2, outputLimit = capSeconds * 24000 * 2 * 2;
     const send = message => { if (ws.readyState === 1) ws.send(JSON.stringify(message)); };
     const finish = reason => {
       if (done) return;
       done = true; clearTimeout(initialTimer); clearTimeout(limitTimer); clearTimeout(drainTimer); clearInterval(heartbeat);
-      upstream?.close();
+      upstream?.close(); pending?.upstream?.close(); pending = null;
       try {
-        if (item) { store.finishLive(item, input, output, reason, timeline); send({ type: 'saved', item }); }
+        if (item) { store.finishLive(item, reason, timeline); send({ type: 'saved', item }); }
         prune();
       } catch { send({ type: 'error', message: 'Local recording could not be saved.' }); }
       if (active?.socket === ws) active = null;
@@ -145,7 +153,7 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
     };
     const requestFinish = reason => {
       if (done || draining) return;
-      draining = true; drainReason = reason; upstream?.close();
+      draining = true; drainReason = reason; upstream?.close(); pending?.upstream?.close(); pending = null;
       clearTimeout(limitTimer);
       // The paid connection ends immediately. Only local recording flush is
       // allowed during this bounded grace period.
@@ -159,24 +167,115 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
       ws.ping();
     }, 10000);
     active = { socket: ws, stop: () => requestFinish('stopped') };
-    // Local recording bookkeeping must never end the paid conversation. A chunk the
-    // timeline cannot place is dropped and logged. (2026-10-11: one stale browser
-    // clock read per session ended four conversations as 'invalid-request'.)
     const recordingMessages = new Set(['recordingStarted', 'recordingChunk', 'recordingEnd', 'recordingDrift']);
-    let recordingNotes = 0;
-    const note = event => { if (recordingNotes++ < 40) item.events.push(event); };
     const integer = value => (Number.isSafeInteger(value) ? value : null);
     const recording = message => {
-      const atMs = Math.round(performance.now() - started);
+      const atMs = now();
       try {
-        if (message.type === 'recordingStarted') { timeline.start(message.frameOrigin); item.events.push({ type: 'recording-start', serverAtMs: atMs, frameOrigin: message.frameOrigin }); }
-        else if (message.type === 'recordingChunk') { const anomaly = timeline.append(message); if (anomaly) note({ type: 'recording-anomaly', atMs, reason: anomaly.type, startFrame: anomaly.startFrame, frames: anomaly.frames, endFrame: anomaly.endFrame }); }
+        if (message.type === 'recordingStarted') { timeline.start(message.frameOrigin, store.dir(item)); item.events.push({ type: 'recording-start', serverAtMs: atMs, frameOrigin: message.frameOrigin }); }
+        else if (message.type === 'recordingChunk') { const anomaly = timeline.append(message); if (anomaly) log({ type: 'recording-anomaly', atMs, reason: anomaly.type, startFrame: anomaly.startFrame, frames: anomaly.frames, endFrame: anomaly.endFrame }, 40); }
         else if (message.type === 'recordingEnd') { timeline.end(message.frames); if (draining) finish(drainReason); }
-        else note({ type: 'recording-drift', atMs, frames: integer(message.frames), currentFrame: integer(message.currentFrame), origin: integer(message.origin), drift: integer(message.drift) });
+        else log({ type: 'recording-drift', atMs, frames: integer(message.frames), currentFrame: integer(message.currentFrame), origin: integer(message.origin), drift: integer(message.drift) }, 40);
       } catch (error) {
-        note({ type: 'recording-error', atMs, messageType: message.type, error: String(error?.message).slice(0, 200), startFrame: integer(message.startFrame), frames: integer(message.frames), endFrame: timeline.endFrame });
+        log({ type: 'recording-error', atMs, messageType: message.type, error: String(error?.message).slice(0, 200), startFrame: integer(message.startFrame), frames: integer(message.frames), endFrame: timeline.endFrame }, 40);
         if (message.type === 'recordingEnd' && draining) finish(drainReason);
       }
+    };
+    // Provider connection. A Gemini session continues across connections (official session
+    // resumption): the latest resumable handle is kept, and on GoAway or an unexpected close a
+    // replacement connection is opened with it while the conversation goes on. Audio that
+    // arrives while no connection is open is dropped and counted, never fatal.
+    let settings, key, connect, generation = 0, current = 0, pending = null, resumeHandle = null, reconnects = 0;
+    const maxReconnects = 12;
+    const reconnect = reason => {
+      if (done || draining || pending || settings.provider !== 'google' || !resumeHandle || reconnects >= maxReconnects) return false;
+      reconnects++;
+      log({ type: 'provider-reconnect', atMs: now(), reason, attempt: reconnects }, 40);
+      pending = { generation: generation + 1, upstream: null };
+      try { pending.upstream = open({ ...settings, resumeHandle }); }
+      catch (error) { pending = null; log({ type: 'provider-reconnect-failed', atMs: now(), detail: String(error?.message).slice(0, 200) }, 40); return false; }
+      return true;
+    };
+    const content = response => {
+      try {
+        const t = now();
+        if (response.usageMetadata) item.usage.push({ atMs: t, source: 'google-live', value: response.usageMetadata });
+        if (response.providerEvent) log({ type: 'provider-event', atMs: t, ...response.providerEvent });
+        const other = Object.keys(response).filter(k => !['serverContent', 'usageMetadata', 'setupComplete', 'providerUsage', 'providerEvent', 'sessionResumptionUpdate'].includes(k));
+        if (other.length) log({ type: 'provider-message', atMs: t, keys: other.slice(0, 10) });
+        if (response.goAway) { log({ type: 'provider-goaway', atMs: t, timeLeft: typeof response.goAway.timeLeft === 'string' ? response.goAway.timeLeft.slice(0, 20) : null }, 40); reconnect('goAway'); }
+        const c = response.serverContent;
+        if (!c) return;
+        if (c.interrupted) { log({ type: 'provider-interrupted', atMs: t }); send({ type: 'interrupted' }); }
+        for (const part of c.modelTurn?.parts || []) {
+          const audio = part.inlineData;
+          if (!audio) continue;
+          if (!/^audio\/pcm(?:;rate=24000)?$/.test(audio.mimeType)) { log({ type: 'provider-data-error', atMs: t, error: 'Unexpected audio format' }, 20); continue; }
+          const pcm = Buffer.from(audio.data, 'base64');
+          if (!pcm.length || pcm.length % 2) { log({ type: 'provider-data-error', atMs: t, error: 'Odd PCM length' }, 20); continue; }
+          if (pendingEnd !== null) {
+            const metric = { name: 'server_activity_end_to_first_audio_ms', value: Math.round(performance.now() - pendingEnd), simulated: mock };
+            item.metrics.push(metric); send({ type: 'metric', metric }); pendingEnd = null;
+          }
+          transport.outputBytes += pcm.length; transport.outputChunks++;
+          // A browser that stops reading loses audio; the conversation itself is not ended for it.
+          if (ws.bufferedAmount > 4 * 1024 * 1024) { log({ type: 'browser-backlog', atMs: t }, 5); continue; }
+          send({ type: 'audio', data: pcm.toString('base64') });
+        }
+        for (const [field, role] of [['inputTranscription', 'user'], ['outputTranscription', 'model']]) if (c[field]?.text) transcript(role, c[field].text);
+        if (c.turnComplete) send({ type: 'turnComplete' });
+      } catch (error) { log({ type: 'provider-data-error', atMs: now(), error: String(error?.message).slice(0, 200) }, 20); }
+    };
+    const open = (connectSettings, initial = false) => {
+      const mine = ++generation;
+      if (initial) current = mine;
+      const isCurrent = () => mine === current, isPending = () => pending?.generation === mine;
+      return connect(connectSettings, {
+        ready() {
+          if (done) return;
+          if (isPending()) {
+            const old = upstream; upstream = pending.upstream; current = mine; pending = null; old?.close();
+            log({ type: 'provider-resumed', atMs: now() }, 40); return;
+          }
+          if (!isCurrent()) return;
+          ready = true; speaking = settings.mode === 'automatic'; clearTimeout(initialTimer); send({ type: 'ready', id: item.id, seconds: settings.seconds, mock });
+          if (mock) return;
+          try { upstream.send({ realtimeInput: { text: liveGreetingPrompt } }); item.events.push({ type: 'greeting-requested', atMs: now() }); }
+          catch (error) { item.events.push({ type: 'server-error', atMs: now(), stage: 'greeting', error: String(error?.message).slice(0, 200) }); requestFinish('provider-unavailable'); }
+        },
+        error(info = {}) {
+          if (done) return;
+          if (isPending()) { pending = null; log({ type: 'provider-reconnect-failed', atMs: now(), detail: info.detail ?? null }, 40); if (!upstream) requestFinish('provider-closed'); return; }
+          if (!isCurrent()) return;
+          log({ type: 'provider-error', atMs: now(), detail: info.detail ?? null }, 40);
+          if (reconnect('error')) { upstream = null; return; }
+          send({ type: 'error', message: 'Live connection failed. Check key access, model availability and quota. No automatic retry.' }); requestFinish('provider-error');
+        },
+        close(info = {}) {
+          if (done) return;
+          if (isPending()) { pending = null; log({ type: 'provider-reconnect-failed', atMs: now(), code: info.code ?? null, reason: info.reason ?? null }, 40); if (!upstream) requestFinish('provider-closed'); return; }
+          if (!isCurrent()) return;
+          log({ type: 'provider-close', atMs: now(), code: info.code ?? null, reason: info.reason ?? null }, 40);
+          if (pending || reconnect('close')) { upstream = null; return; }
+          requestFinish('provider-closed');
+        },
+        message(response) {
+          // Final usage can arrive after the session was saved (GPT-Live's session.closed): update the saved record.
+          if (done) {
+            if (response.providerUsage && item) {
+              item.usage.push({ atMs: now(), source: response.providerUsage.source, value: response.providerUsage.value, afterSave: true });
+              try { item.costSummary = summarizeLive(item); store.save(item); } catch { /* The record may have moved to the trash. */ }
+            }
+            return;
+          }
+          if (response.sessionResumptionUpdate?.resumable && typeof response.sessionResumptionUpdate.newHandle === 'string' && response.sessionResumptionUpdate.newHandle) resumeHandle = response.sessionResumptionUpdate.newHandle.slice(0, 4096);
+          if (!isCurrent()) return;
+          // Usage still counts while draining (e.g. GPT-Live's final seconds arrive after session.close).
+          if (response.providerUsage) item.usage.push({ atMs: now(), source: response.providerUsage.source, value: response.providerUsage.value });
+          if (draining) return;
+          content(response);
+        },
+      }, { key, mock });
     };
     ws.on('pong', () => { lastPong = performance.now(); });
     ws.on('message', data => {
@@ -188,92 +287,42 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
         if (item && ready && recordingMessages.has(message.type)) { recording(message); return; }
         if (draining) return;
         if (message.type === 'start' && !item) {
-          const settings = validate('live', message);
-          item = store.begin('live', settings, mock); started = performance.now();
+          settings = validate('live', message);
+          item = store.begin('live', settings, mock); item.transport = transport; started = performance.now();
           const openai = settings.provider === 'openai' || settings.provider === 'openai-live';
-          const key = mock ? null : openai ? loadOpenAIKey() : loadGoogleKey({ repoRoot: join(root, '..') });
+          key = mock ? null : openai ? loadOpenAIKey() : loadGoogleKey({ repoRoot: join(root, '..') });
           limitTimer = setTimeout(() => requestFinish('time-limit'), Math.min(settings.seconds * 1000, maxSessionMs));
           // Mock mode always uses the synthetic tone path, whatever the provider.
-          const connect = mock ? provider.connectLive : settings.provider === 'openai-live' ? provider.connectGptLive : openai ? provider.connectRealtime : provider.connectLive;
-          upstream = connect(settings, {
-            ready() {
-              if (done) return; ready = true; speaking = settings.mode === 'automatic'; clearTimeout(initialTimer); send({ type: 'ready', id: item.id, seconds: settings.seconds, mock });
-              if (mock) return;
-              try { upstream.send({ realtimeInput: { text: liveGreetingPrompt } }); item.events.push({ type: 'greeting-requested', atMs: Math.round(performance.now() - started) }); }
-              catch (error) { item.events.push({ type: 'server-error', atMs: Math.round(performance.now() - started), stage: 'greeting', error: String(error?.message).slice(0, 200) }); requestFinish('provider-unavailable'); }
-            },
-            error(info = {}) { if (item) item.events.push({ type: 'provider-error', atMs: Math.round(performance.now() - started), detail: info.detail ?? null }); send({ type: 'error', message: 'Live connection failed. Check key access, model availability and quota. No automatic retry.' }); requestFinish('provider-error'); },
-            close(info = {}) { if (item) item.events.push({ type: 'provider-close', atMs: Math.round(performance.now() - started), code: info.code ?? null, reason: info.reason ?? null }); requestFinish('provider-closed'); },
-            message(response) {
-              // Final usage can arrive after the session was saved (GPT-Live's session.closed): update the saved record.
-              if (done) {
-                if (response.providerUsage && item) {
-                  item.usage.push({ atMs: Math.round(performance.now() - started), source: response.providerUsage.source, value: response.providerUsage.value, afterSave: true });
-                  try { item.costSummary = summarizeLive(item); store.save(item); } catch { /* The record may have moved to the trash. */ }
-                }
-                return;
-              }
-              // Usage still counts while draining (e.g. GPT-Live's final seconds arrive after session.close).
-              if (response.providerUsage) item.usage.push({ atMs: Math.round(performance.now() - started), source: response.providerUsage.source, value: response.providerUsage.value });
-              if (draining) return;
-              try {
-                const t = Math.round(performance.now() - started);
-                if (response.usageMetadata) item.usage.push({ atMs: t, source: 'google-live', value: response.usageMetadata });
-                if (response.providerEvent) item.events.push({ type: 'provider-event', atMs: t, ...response.providerEvent });
-                const other = Object.keys(response).filter(key => !['serverContent', 'usageMetadata', 'setupComplete', 'providerUsage', 'providerEvent'].includes(key));
-                if (other.length) item.events.push({ type: 'provider-message', atMs: t, keys: other.slice(0, 10), goAway: response.goAway ?? undefined });
-                const content = response.serverContent;
-                if (!content) return;
-                if (content.interrupted) { item.events.push({ type: 'provider-interrupted', atMs: t }); send({ type: 'interrupted' }); }
-                for (const part of content.modelTurn?.parts || []) {
-                  const audio = part.inlineData;
-                  if (!audio) continue;
-                  if (!/^audio\/pcm(?:;rate=24000)?$/.test(audio.mimeType)) throw new Error('Unexpected audio format');
-                  // Provider chunks can be larger than browser input frames.
-                  const pcm = Buffer.from(audio.data, 'base64');
-                  if (pcm.length % 2) throw new Error('Unexpected audio format');
-                  if (outputBytes + pcm.length > outputLimit) { send({ type: 'error', message: '受信音声の保存上限に達したため会話を終了します。' }); return requestFinish('size-limit'); }
-                  if (pendingEnd !== null) {
-                    const metric = { name: 'server_activity_end_to_first_audio_ms', value: Math.round(performance.now() - pendingEnd), simulated: mock };
-                    item.metrics.push(metric); send({ type: 'metric', metric }); pendingEnd = null;
-                  }
-                  item.events.push({ type: 'output-chunk', atMs: t, byteOffset: outputBytes, bytes: pcm.length });
-                  output.push(pcm); outputBytes += pcm.length;
-                  if (ws.bufferedAmount > 1024 * 1024) throw new Error('Slow client');
-                  send({ type: 'audio', data: pcm.toString('base64') });
-                }
-                for (const [field, role] of [['inputTranscription', 'user'], ['outputTranscription', 'model']]) {
-                  if (content[field]?.text) { const entry = { type: 'transcript', atMs: t, role, text: content[field].text }; item.events.push(entry); send(entry); }
-                }
-                if (content.turnComplete) send({ type: 'turnComplete' });
-              } catch (error) { item.events.push({ type: 'server-error', atMs: Math.round(performance.now() - started), stage: 'provider-message', error: String(error?.message).slice(0, 200) }); finish('invalid-provider-data'); }
-            },
-          }, { key, mock });
+          connect = mock ? provider.connectLive : settings.provider === 'openai-live' ? provider.connectGptLive : openai ? provider.connectRealtime : provider.connectLive;
+          upstream = open(settings, true);
           return;
         }
         if (!ready || !item) throw new Error('Session not ready');
-        const atMs = Math.round(performance.now() - started);
-        if (message.type === 'mockTurn' && mock) { upstream.send({ realtimeInput: { activityEnd: {} } }); return; }
+        const atMs = now();
+        if (message.type === 'mockTurn' && mock) { upstream?.send({ realtimeInput: { activityEnd: {} } }); return; }
         if (message.type === 'activityStart' && item.mode === 'manual' && !speaking) {
           speaking = true; pendingEnd = null;
           item.events.push({ type: 'activityStart', atMs });
-          upstream.send({ realtimeInput: { activityStart: {} } }); return;
+          upstream?.send({ realtimeInput: { activityStart: {} } }); return;
         }
         if (message.type === 'audio' && speaking) {
           const pcm = pcmFromBase64(message.data);
-          if (inputBytes + pcm.length > inputLimit) { send({ type: 'error', message: 'マイク入力の保存上限に達したため会話を終了します。' }); return requestFinish('size-limit'); }
-          input.push(pcm); item.events.push({ type: 'input-chunk', atMs, byteOffset: inputBytes, bytes: pcm.length }); inputBytes += pcm.length;
+          transport.inputBytes += pcm.length; transport.inputChunks++;
+          if (!upstream) { transport.droppedInputChunks++; return; }
           upstream.send({ realtimeInput: { audio: { data: message.data, mimeType: 'audio/pcm;rate=16000' } } }); return;
         }
         if (message.type === 'activityEnd' && item.mode === 'manual' && speaking) {
           speaking = false; pendingEnd = performance.now(); item.events.push({ type: 'activityEnd', atMs });
-          upstream.send({ realtimeInput: { activityEnd: {} } }); return;
+          upstream?.send({ realtimeInput: { activityEnd: {} } }); return;
         }
         throw new Error('Invalid Live event');
       } catch (error) {
-        if (item) item.events.push({ type: 'server-error', atMs: Math.round(performance.now() - started), stage: 'client-message', messageType: typeof message?.type === 'string' ? message.type.slice(0, 40) : null, error: String(error?.message).slice(0, 200) });
-        // A closed or backed-up provider connection is not the browser's fault.
-        if (error?.upstream) { send({ type: 'error', message: 'AI側の接続が切れました。録音を保存します。' }); return requestFinish('provider-unavailable'); }
+        if (item) log({ type: 'server-error', atMs: now(), stage: 'client-message', messageType: typeof message?.type === 'string' ? message.type.slice(0, 40) : null, error: String(error?.message).slice(0, 200) }, 40);
+        if (error?.upstream) {
+          // The provider connection is gone, not the browser. Gemini goes on through a resumed connection.
+          if (pending || reconnect('send-failed')) { upstream = null; return; }
+          send({ type: 'error', message: 'AI側の接続が切れました。録音を保存します。' }); return requestFinish('provider-unavailable');
+        }
         send({ type: 'error', message: 'Could not start or continue this experiment. Check settings and credential configuration.' }); finish('invalid-request');
       }
     });

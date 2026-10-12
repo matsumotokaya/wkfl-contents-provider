@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Timeline } from '../lib/timeline.mjs';
 
 function worklet() {
@@ -28,14 +30,18 @@ test('worklet common clock preserves 100ms silence, mic, played response and can
   // A cancelled BufferSource contributes zeros to the next render quantum.
   assert.equal(w.render(zero, zero)[0], 0);
   w.command('finish');
+  const dir = mkdtempSync(join(tmpdir(), 'wkfl-timeline-test-'));
   const timeline = new Timeline();
   for (const m of w.messages) {
-    if (m.type === 'recordingStarted') timeline.start(m.frameOrigin);
+    if (m.type === 'recordingStarted') timeline.start(m.frameOrigin, dir);
     if (m.type === 'recordingChunk') timeline.append({ startFrame: m.startFrame, input: Buffer.from(m.input).toString('base64'), playback: Buffer.from(m.playback).toString('base64') });
     if (m.type === 'recordingEnd') timeline.end(m.frames);
   }
-  const tracks = timeline.render();
-  assert.equal(timeline.metadata().durationMs, 400); assert.equal(timeline.metadata().frameOrigin, 8000);
+  assert.deepEqual(timeline.close(), ['mix.wav', 'input.wav', 'output.wav']);
+  const tracks = Object.fromEntries(['input', 'output', 'mix'].map(name => [name, readFileSync(join(dir, name + '.wav'))]));
+  rmSync(dir, { recursive: true, force: true });
+  assert.equal(tracks.input.readUInt32LE(40), 6400 * 2); assert.equal(tracks.input.readUInt32LE(24), 16000);
+  assert.equal(timeline.metadata().durationMs, 400); assert.equal(timeline.metadata().frameOrigin, 8000); assert.equal(timeline.metadata().chunks, 4);
   assert.equal(tracks.input.readInt16LE(44), 0);
   assert.equal(tracks.input.readInt16LE(44 + 1600 * 2), 8192);
   assert.equal(tracks.output.readInt16LE(44 + 3200 * 2), 16384);
