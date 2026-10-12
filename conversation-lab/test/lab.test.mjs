@@ -203,6 +203,19 @@ test('health and recording drain are local only; server keeps received audio sep
   assert.equal((await request(f.url, `/experiments/${item.id}/mix.wav`)).status, 200);
   ws.terminate();
 });
+test('audio caps follow the session limit and end a session gracefully, not as invalid-request', async t => {
+  const f = await fixture(t, { maxSessionMs: 1000 }); // input cap = (1 + 5) s * 32 kB/s = 192,000 bytes
+  const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
+  ws.send(JSON.stringify({ ...start, mode: 'automatic' })); await next('ready');
+  const chunk = Buffer.alloc(3200).toString('base64');
+  for (let i = 0; i < 61; i++) ws.send(JSON.stringify({ type: 'audio', data: chunk }));
+  const error = await next('error'); assert.match(error.message, /マイク入力/);
+  const { item } = await next('saved');
+  assert.equal(item.endReason, 'size-limit');
+  assert.equal(item.events.filter(e => e.type === 'server-error').length, 0);
+  assert.equal(item.events.filter(e => e.type === 'input-chunk').length, 60);
+  ws.terminate();
+});
 test('recording bookkeeping problems are logged and never end the session', async t => {
   const f = await fixture(t);
   const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');

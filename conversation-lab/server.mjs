@@ -123,6 +123,13 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
     let limitTimer, drainTimer, draining = false, drainReason;
     // Sized for the longest allowed session plus the drain grace period.
     const timeline = new Timeline((Math.ceil(maxSessionMs / 1000) + 2) * 16000);
+    // In-memory audio caps follow the session limit so the time limit always ends a
+    // session first. Microphone PCM (16 kHz) arrives in real time; providers may send
+    // output (24 kHz) ahead of real time, so that cap is twice real time. Reaching a cap
+    // ends the session gracefully. (2026-10-12: the former fixed 6 MB input cap, sized
+    // for 180 s, cut a 5-minute GPT-Live conversation at 196 s as 'invalid-request'.)
+    const capSeconds = Math.ceil(maxSessionMs / 1000) + 5;
+    const inputLimit = capSeconds * 16000 * 2, outputLimit = capSeconds * 24000 * 2 * 2;
     const send = message => { if (ws.readyState === 1) ws.send(JSON.stringify(message)); };
     const finish = reason => {
       if (done) return;
@@ -224,7 +231,8 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
                   if (!/^audio\/pcm(?:;rate=24000)?$/.test(audio.mimeType)) throw new Error('Unexpected audio format');
                   // Provider chunks can be larger than browser input frames.
                   const pcm = Buffer.from(audio.data, 'base64');
-                  if (pcm.length % 2 || outputBytes + pcm.length > 12 * 1024 * 1024) throw new Error('Output size limit');
+                  if (pcm.length % 2) throw new Error('Unexpected audio format');
+                  if (outputBytes + pcm.length > outputLimit) { send({ type: 'error', message: '受信音声の保存上限に達したため会話を終了します。' }); return requestFinish('size-limit'); }
                   if (pendingEnd !== null) {
                     const metric = { name: 'server_activity_end_to_first_audio_ms', value: Math.round(performance.now() - pendingEnd), simulated: mock };
                     item.metrics.push(metric); send({ type: 'metric', metric }); pendingEnd = null;
@@ -253,7 +261,7 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
         }
         if (message.type === 'audio' && speaking) {
           const pcm = pcmFromBase64(message.data);
-          if (inputBytes + pcm.length > 6 * 1024 * 1024) throw new Error('Input size limit');
+          if (inputBytes + pcm.length > inputLimit) { send({ type: 'error', message: 'マイク入力の保存上限に達したため会話を終了します。' }); return requestFinish('size-limit'); }
           input.push(pcm); item.events.push({ type: 'input-chunk', atMs, byteOffset: inputBytes, bytes: pcm.length }); inputBytes += pcm.length;
           upstream.send({ realtimeInput: { audio: { data: message.data, mimeType: 'audio/pcm;rate=16000' } } }); return;
         }
