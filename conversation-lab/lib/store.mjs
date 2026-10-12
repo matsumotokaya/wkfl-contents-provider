@@ -34,6 +34,13 @@ export class Store {
     item.costSummary = summarizeLive(item);
     this.save(item);
   }
+  // At startup no session is running, so a 'running' record was cut off by a server stop or crash.
+  // It is closed as 'server-stopped' so that history pruning removes it like any other record.
+  recoverStale() {
+    const stale = this.list().filter(item => item.status === 'running');
+    for (const item of stale) { item.status = 'interrupted'; item.endReason = 'server-stopped'; item.endedAt ??= new Date().toISOString(); this.save(item); }
+    return stale.map(item => item.id);
+  }
   // Keeps the newest `keep` items per model. Older ones move to `trashDir` (recoverable), never hard-deleted.
   // Running items are never moved.
   prune(keep, trashDir) {

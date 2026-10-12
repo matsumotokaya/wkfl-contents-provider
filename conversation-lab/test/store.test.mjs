@@ -5,6 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../lib/store.mjs';
 
+test('a record left running by a server stop is closed at startup so pruning can remove it', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'wkfl-store-test-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const store = new Store(join(dir, 'data'));
+  const item = store.begin('live', { model: 'gemini-3.8-live', voice: 'Kore' }, false);
+  assert.deepEqual(store.recoverStale(), [item.id]);
+  const saved = store.list()[0];
+  assert.equal(saved.status, 'interrupted'); assert.equal(saved.endReason, 'server-stopped');
+  assert.deepEqual(store.recoverStale(), []);
+});
 test('history keeps the newest five per model and moves older ones to the trash folder', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'wkfl-store-test-')), trash = join(dir, 'trash');
   t.after(() => rmSync(dir, { recursive: true, force: true }));

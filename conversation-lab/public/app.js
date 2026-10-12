@@ -134,7 +134,7 @@ function renderSessionLimit(model) {
   if (!limit) return;
   box.append('API の上限：' + limit.official + '。' + limit.handling + ' ', externalLink(limit.source, '公式資料'));
 }
-const endLabels = { stopped: '停止ボタンで終了', 'time-limit': '設定した上限時間で終了', 'provider-closed': 'AI側が接続を終了（APIの上限など。記録の provider-close を確認）', 'provider-error': 'AI側のエラーで終了', 'provider-unavailable': 'AI側の接続が使えず終了', 'invalid-request': 'サーバーが拒否して終了（不具合。記録を確認）', 'client-closed': 'ブラウザ側の切断で終了', 'client-unavailable': 'ブラウザが応答せず終了', 'client-error': 'ブラウザ接続のエラーで終了', 'setup-timeout': '接続の準備が時間切れ', 'invalid-provider-data': 'AI側のデータ異常で終了', 'size-limit': '保存上限で終了' };
+const endLabels = { stopped: '停止ボタンで終了', 'time-limit': '設定した上限時間で終了', 'provider-closed': 'AI側が接続を終了（APIの上限など。記録の provider-close を確認）', 'provider-error': 'AI側のエラーで終了', 'provider-unavailable': 'AI側の接続が使えず終了', 'invalid-request': 'サーバーが拒否して終了（不具合。記録を確認）', 'client-closed': 'ブラウザ側の切断で終了', 'client-unavailable': 'ブラウザが応答せず終了', 'client-error': 'ブラウザ接続のエラーで終了', 'setup-timeout': '接続の準備が時間切れ', 'invalid-provider-data': 'AI側のデータ異常で終了', 'size-limit': '保存上限で終了', 'server-stopped': 'サーバーの停止で中断' };
 const endLabel = reason => endLabels[reason] || reason || '';
 function selectModel(kind, model) {
   if (busy) return;

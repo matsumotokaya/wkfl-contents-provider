@@ -20,6 +20,7 @@ import { demoSettings, demoSets, publicDemoSettings, readDemos } from './lib/voi
 const root = dirname(fileURLToPath(import.meta.url));
 export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'mock' : 'experiments'), voiceDemoDir = join(root, 'data', 'voice-demos', demoSets.google.dirName), openaiVoiceDemoDir = join(root, 'data', 'voice-demos', demoSets.openai.dirName), historyLimit = 5, trashDir = null, maxSessionMs = 90 * 60 * 1000, provider = { synthesize, connectLive, connectRealtime, connectGptLive } } = {}) {
   const store = new Store(dataDir);
+  store.recoverStale();
   // History is kept short on purpose (user decision, 2026-10-11); older items go to the trash folder.
   const prune = () => { try { store.prune(historyLimit, trashDir); } catch { /* Retention must never break a session. */ } };
   prune();
