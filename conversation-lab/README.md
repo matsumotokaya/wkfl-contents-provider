@@ -25,6 +25,7 @@ npm run mock
 - Liveの上限は1分〜90分から選ぶ（既定5分）。使いすぎ防止のためで、会話は停止ボタンでいつでも終えられます。各モデルの公式セッション上限は画面に表示します（Realtime は60分、GPT-Live は非公開、Gemini は圧縮とセッション再開で接続を継ぎ直す）。
 - 声カタログ: 公式プリセット30声をカードで一覧表示。日本語デモ（`npm run voice-demos`。既定は計画表示のみ、`--execute` で1声1回のTTS課金）と英語デモ（Google Cloud資料）を再生できる。各カードの「</> コード」から、AIへの指示・Live API setup・TTSリクエストのJSONをコピーできる。
 - OpenAI Realtime（gpt-realtime-2.1 / mini）: Gemini Liveと同じ画面・録音・料金表示で会話できる。
+- 番組づくり（`/studio`、実験）: やりたいことから選ぶ別ページ。いまはポッドキャストのインタビューだけ試せる。AIがホストとして質問し、答えていくだけで番組が1本できる。表現の設定（番組名・テーマ・ホストの人格・聞き方など）は全モデル共通で、名前を付けて保存できる。詳細は [HANDOFF.md](HANDOFF.md#番組づくりstudio実験2026-10-12-実装実会話未検証)。
 - OpenAI GPT-Live（gpt-live-1）: 会話は gpt-live-1、深い推論は委任先（gpt-6-luna / gpt-6-sol）が担当。全二重のため自然会話のみ。料金は音声の秒数＋委任先のトークン。キーは `~/.secrets/wkfl/openai-token`。RealtimeとGPT-Liveの違いは画面の説明パネル。
 - 選択モデルごとの日時・声・条件・録音・文字起こし・API使用量と概算料金（USD・円）の履歴。モデルごとに新しい5件だけ残し、古いものはmacOSのゴミ箱へ移す。ElevenLabs / Cartesiaは無効な「追加予定」のみ。
 

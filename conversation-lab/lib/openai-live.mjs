@@ -13,6 +13,7 @@ export function toLiveEvents(message) {
   if (input.audio) return [{ type: 'session.input_audio.append', audio: upsample16kTo24k(Buffer.from(input.audio.data, 'base64')).toString('base64') }];
   // Making the model speak first: trusted instructions with no delegation target.
   if (typeof input.text === 'string') return [{ type: 'session.instructions.append', content: input.text, delegation_id: null }];
+  if (typeof message.instruction === 'string') return [{ type: 'session.instructions.append', content: message.instruction, delegation_id: null }];
   return [];
 }
 // Transcript deltas carry approximate speech times; the docs say to group by them, not by arrival.

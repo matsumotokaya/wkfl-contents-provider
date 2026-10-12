@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conversation Lab Studio</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<div class="shell">
+<header><a class="brand" href="/">CONVERSATION LAB <span>STUDIO / EXPERIMENTAL</span></a><nav class="pages" aria-label="ページ"><a href="/">モデル検証</a><a href="/studio" aria-current="page">番組づくり（実験）</a></nav><span id="mode" class="badge">読み込み中</span></header>
+<main>
+<aside id="mode-notice" class="mode-banner" role="note">動作モードを確認しています。まだAIには接続していません。</aside>
+<p id="status" role="status" aria-live="polite">準備中…</p>
+<div class="workbench">
+<aside class="model-list" aria-label="やりたいこと"><p class="eyebrow">やりたいこと</p><div id="use-cases"></div></aside>
+<div class="model-workspace">
+<section class="panel" aria-labelledby="format-title">
+<div class="section-head"><div><h2 id="format-title">インタビュー番組をつくる</h2><p>PODCAST / INTERVIEW</p></div></div>
+<p id="format-summary"></p>
+<div class="preset-bar">
+<div><label for="preset">保存した設定</label><select id="preset"><option value="">（選ぶと読み込みます）</option></select></div>
+<div><label for="preset-name">保存する名前</label><input id="preset-name" maxlength="40" placeholder="例：新規事業の回"></div>
+<button id="preset-save" type="button">今の設定を保存</button><button id="preset-delete" type="button">選んだ設定を削除</button>
+</div>
+<div class="two">
+<div><label for="title">番組名</label><input id="title" maxlength="100" placeholder="例：WKFL インタビュー"></div>
+<div><label for="guest">ゲスト（あなた）の名前</label><input id="guest" maxlength="50" placeholder="空欄なら「ゲスト」と呼びます"></div>
+</div>
+<label for="theme">今日のテーマ・聞いてほしいこと</label><textarea id="theme" rows="2" maxlength="1000" placeholder="例：新規事業として作っているアプリ Universal IO について"></textarea>
+<label for="profile">ゲストの紹介（AIが事前に知っておくこと・任意）</label><textarea id="profile" rows="3" maxlength="3000" placeholder="例：個人でAIメディアを運営している。本業はデザイナー。"></textarea>
+<div class="two">
+<div><label for="host">ホストの人格</label><select id="host"></select><p id="host-note" class="note"></p></div>
+<div><label for="style">聞き方</label><select id="style"></select><p id="style-note" class="note"></p></div>
+</div>
+<label for="extra">追加の指示（任意）</label><textarea id="extra" rows="2" maxlength="2000" placeholder="例：専門用語は使わずに。最後に次回予告をひとこと。"></textarea>
+<details class="prompt-preview"><summary>AIに送る指示（全文）</summary><pre id="prompt"></pre></details>
+</section>
+<section class="panel" aria-labelledby="record-title">
+<div class="section-head"><div><h2 id="record-title">収録する</h2><p>モデルと声はどれでも選べます。上の表現の設定は全モデル共通です。</p></div></div>
+<div class="two">
+<div><label for="model">モデル</label><select id="model"></select></div>
+<div><label for="voice">ホストの声</label><select id="voice"></select></div>
+</div>
+<div id="delegate-field" hidden><label for="delegate">考える役（委任先のモデル）</label><select id="delegate"></select></div>
+<div class="fields"><div><label for="seconds">収録の上限（使いすぎ防止。停止ボタンでいつでも終えられます）</label><select id="seconds"><option value="300">5分</option><option value="900" selected>15分</option><option value="1800">30分</option><option value="3600">60分</option><option value="5400">90分</option></select></div><div class="timer"><span id="countdown">—</span><small>残り</small></div></div>
+<p id="limit" class="note"></p>
+<p class="notice api-notice">開始後はAPI料金が発生します。マイク音声をAIの提供元へ送信します。ヘッドホン推奨。</p>
+<div class="actions"><button id="start" class="primary" disabled>収録を始める</button><button id="wrap-up" disabled>締めに入ってもらう</button><button id="stop" disabled>停止・保存</button></div>
+<p class="note">AIがオープニングから始めます。終わりにしたくなったら「締めに入ってもらう」を押すと、AIが要点をまとめてお礼を言い、番組を締めます（Realtime では、あなたが次に話し終えたあと）。締め終わったら「停止・保存」を押してください。</p>
+<p id="transcript-label" class="field-label">番組の文字起こし</p>
+<div id="transcript" class="transcript" role="log" aria-labelledby="transcript-label" tabindex="0"><span class="muted">収録が始まると、ここに文字起こしが表示されます。</span></div>
+<p id="result" class="note" aria-live="polite"></p>
+</section>
+<section class="archive" aria-labelledby="episodes-title"><div class="archive-head"><div><p class="eyebrow">EPISODES</p><h2 id="episodes-title">収録した番組</h2></div><button id="refresh">一覧を更新</button></div><p class="note">番組づくりで収録したものだけを表示します。古いものはモデルごとに新しい5本を残して自動で整理されます。</p><div id="episodes"></div></section>
+</div></div>
+</main></div><script type="module" src="/studio.js"></script>
+</body></html>

@@ -47,7 +47,8 @@ export class Store {
     if (!keep || !trashDir) return [];
     const moved = [], seen = new Map();
     for (const item of this.list()) {
-      const n = (seen.get(item.model) || 0) + 1; seen.set(item.model, n);
+      // Studio episodes are kept separately from model-lab sessions of the same model.
+      const key = item.model + (item.studio ? ':studio' : ''), n = (seen.get(key) || 0) + 1; seen.set(key, n);
       if (n <= keep || item.status === 'running') continue;
       mkdirSync(trashDir, { recursive: true });
       renameSync(join(this.root, item.id), join(trashDir, `conversation-lab-${item.id}`));

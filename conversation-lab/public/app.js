@@ -1,19 +1,17 @@
 import { summarizeLive, pricingByModel } from '/cost.mjs';
 import { voiceSnippets, openaiVoiceSnippets, gptLiveVoiceSnippets } from '/snippets.mjs';
-import { groupTranscript, toBlocks } from '/transcript.mjs';
-const $ = id => document.getElementById(id);
+import { createLiveSession } from '/live-session.js';
+import { $, externalLink, endLabel, formatClock, createTranscriptView, savedTranscript } from '/shared.js';
 let selectedKind = 'live', selectedModel = 'gemini-3.8-live';
-let cfg, busy = false, socket, context, stream, capture, source, playbackBus;
-let liveStarting = false, startupVersion = 0, stopping = false, flushTimer;
-let talking = false, flushing = false, countdownTimer, deadline, nextPlayback = 0, liveReady = false;
-const playback = new Set();
+let cfg, busy = false, live = null, countdownTimer;
+const transcriptView = createTranscriptView($('transcript'));
 const status = (text, error = false) => { $('status').textContent = text; $('status').classList.toggle('error', error); };
 function controls() {
   $('generate').disabled = busy || !cfg;
   $('live-start').disabled = busy || !cfg;
-  $('tts-stop').disabled = !busy || Boolean(socket) || liveStarting;
-  $('live-stop').disabled = stopping || (!socket && !liveStarting);
-  $('talk').disabled = !liveReady || flushing || (!cfg?.mock && $('turn-mode').value === 'automatic');
+  $('tts-stop').disabled = !busy || Boolean(live?.active);
+  $('live-stop').disabled = !live?.active || live.stopping;
+  $('talk').disabled = !live?.ready || live.flushing || (!cfg?.mock && $('turn-mode').value === 'automatic');
   for (const button of document.querySelectorAll('#models button')) button.disabled = busy;
   for (const id of ['tts-model','tts-voice','text','tts-condition','live-model','live-voice','live-condition','live-delegate','seconds','turn-mode']) $(id).disabled = busy;
   if (busy) stopDemo();
@@ -22,65 +20,6 @@ async function api(path, body) {
   const response = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Lab-Token': cfg.csrf }, body: JSON.stringify(body) } : {});
   const value = await response.json(); if (!response.ok) throw new Error(value.error); return value;
 }
-function base64(buffer) { let text = ''; for (const b of new Uint8Array(buffer)) text += String.fromCharCode(b); return btoa(text); }
-function send(message) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
-function stopPlayback() { for (const node of playback) { try { node.stop(); } catch { /* Already stopped. */ } } playback.clear(); nextPlayback = 0; }
-function playAudio(data) {
-  if (!context || context.state === 'closed' || stopping) return;
-  const raw = atob(data), bytes = Uint8Array.from(raw, c => c.charCodeAt(0));
-  const pcm = new DataView(bytes.buffer); const audio = context.createBuffer(1, bytes.length / 2, 24000);
-  const channel = audio.getChannelData(0); for (let i = 0; i < channel.length; i++) channel[i] = pcm.getInt16(i * 2, true) / 32768;
-  const node = context.createBufferSource(); node.buffer = audio; node.connect(playbackBus);
-  const start = Math.max(context.currentTime + .02, nextPlayback); nextPlayback = start + audio.duration;
-  playback.add(node); node.onended = () => playback.delete(node); node.start(start);
-}
-function cleanup() {
-  liveReady = false; talking = false; flushing = false;
-  clearInterval(countdownTimer); stopPlayback();
-  clearTimeout(flushTimer); capture?.disconnect(); source?.disconnect(); playbackBus?.disconnect(); stream?.getTracks().forEach(track => track.stop());
-  if (context && context.state !== 'closed') context.close().catch(() => {});
-  capture = source = playbackBus = stream = context = null;
-  $('talk').textContent = cfg?.mock ? 'デモ音を再生（会話ではありません）' : '話し始める'; $('talk').classList.remove('recording');
-  $('countdown').textContent = '—';
-}
-function flushRecording() {
-  if (stopping) return;
-  stopping = true; liveReady = false; talking = false;
-  clearInterval(countdownTimer); stopPlayback();
-  stream?.getTracks().forEach(track => track.stop());
-  if (capture && context?.state === 'running') {
-    capture.port.postMessage('finish');
-    // If a suspended worklet cannot acknowledge, the server marks the final
-    // recording incomplete instead of substituting received model audio.
-    flushTimer = setTimeout(() => { cleanup(); send({ type: 'stop' }); }, 800);
-  } else { cleanup(); send({ type: 'stop' }); }
-  controls();
-}
-// The server groups transcript fragments into speaker lines (lib/transcript.mjs) and sends each
-// fragment with its line index; the view renders paragraphs, at most a few times a second.
-let transcriptLines = [], transcriptTimer = null;
-function resetTranscript() { transcriptLines = []; clearTimeout(transcriptTimer); transcriptTimer = null; $('transcript').replaceChildren(); }
-function addTranscript(message) {
-  if (!Number.isInteger(message.index) || message.index < 0) return;
-  const line = transcriptLines[message.index] ??= { role: message.role, text: '', atMs: message.atMs, untilMs: message.untilMs };
-  line.text += message.text; line.atMs = message.atMs; line.untilMs = message.untilMs;
-  transcriptTimer ??= setTimeout(renderTranscript, 200);
-}
-function renderTranscript() {
-  transcriptTimer = null;
-  const box = $('transcript'), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-  box.querySelector('.muted')?.remove();
-  const blocks = toBlocks(transcriptLines), rows = box.querySelectorAll('p.line');
-  blocks.forEach((block, i) => {
-    let p = rows[i];
-    if (!p) { p = document.createElement('p'); const who = document.createElement('span'), body = document.createElement('span'); who.className = 'who'; p.append(who, body); box.append(p); }
-    p.className = `line ${block.role}`; p.firstChild.textContent = block.role === 'user' ? '自分' : 'モデル'; p.lastChild.textContent = block.text;
-  });
-  for (let i = blocks.length; i < rows.length; i++) rows[i].remove();
-  if (atBottom) box.scrollTop = box.scrollHeight;
-}
-// History: sessions from 2026-10-12 store grouped lines; older ones store fragments and are grouped here.
-const savedTranscript = item => toBlocks(item.transcriptFormat === 'speaker-lines-v1' ? (item.events || []).filter(e => e.type === 'transcript') : groupTranscript(item.events));
 const modalityLabel = { TEXT: 'テキスト', AUDIO: '音声', IMAGE: '画像', VIDEO: '動画', UNCLASSIFIED: '内訳なし', THINKING: 'thinking', CACHED_TEXT: 'テキスト（キャッシュ）', CACHED_AUDIO: '音声（キャッシュ）', TRANSCRIPTION: '文字起こし' };
 const money = (usdValue, fx) => usdValue === null ? '不明' : `$${usdValue.toFixed(4)}（約${(usdValue * fx.usdJpy).toLocaleString('ja-JP', { maximumFractionDigits: 2 })}円）`;
 const tokens = value => (value ?? 0).toLocaleString('ja-JP');
@@ -134,8 +73,6 @@ function renderSessionLimit(model) {
   if (!limit) return;
   box.append('API の上限：' + limit.official + '。' + limit.handling + ' ', externalLink(limit.source, '公式資料'));
 }
-const endLabels = { stopped: '停止ボタンで終了', 'time-limit': '設定した上限時間で終了', 'provider-closed': 'AI側が接続を終了（APIの上限など。記録の provider-close を確認）', 'provider-error': 'AI側のエラーで終了', 'provider-unavailable': 'AI側の接続が使えず終了', 'invalid-request': 'サーバーが拒否して終了（不具合。記録を確認）', 'client-closed': 'ブラウザ側の切断で終了', 'client-unavailable': 'ブラウザが応答せず終了', 'client-error': 'ブラウザ接続のエラーで終了', 'setup-timeout': '接続の準備が時間切れ', 'invalid-provider-data': 'AI側のデータ異常で終了', 'size-limit': '保存上限で終了', 'server-stopped': 'サーバーの停止で中断' };
-const endLabel = reason => endLabels[reason] || reason || '';
 function selectModel(kind, model) {
   if (busy) return;
   selectedKind = kind; selectedModel = model;
@@ -159,7 +96,6 @@ function selectModel(kind, model) {
   refresh().catch(error => status(error.message, true));
 }
 const genderLabel = { female: '女性', male: '男性', neutral: 'ニュートラル' };
-function externalLink(href, text) { const link = document.createElement('a'); link.href = href; link.textContent = text; link.target = '_blank'; link.rel = 'noopener noreferrer'; return link; }
 const voiceValue = kind => document.querySelector(`input[name="${kind}-voice"]:checked`)?.value;
 const providerOf = (kind, model) => cfg.catalog[kind].providers?.[model] || 'google';
 const profilesFor = provider => provider === 'openai-live' ? cfg.gptLiveVoiceProfiles.voices : provider === 'openai' ? cfg.openaiVoiceProfiles.voices : cfg.voiceProfiles.voices;
@@ -307,7 +243,7 @@ async function refresh() {
   for (const item of items) {
     const row = document.createElement('article'); row.className = 'experiment';
     const info = document.createElement('div'), media = document.createElement('div');
-    const h = document.createElement('h3'); h.textContent = `${item.voice} / ${item.kind.toUpperCase()}${item.mock ? ' · MOCK' : ''}`;
+    const h = document.createElement('h3'); h.textContent = `${item.voice} / ${item.kind.toUpperCase()}${item.studio ? ' · 番組づくり' : ''}${item.mock ? ' · MOCK' : ''}`;
     const model = document.createElement('p'); model.textContent = item.model;
     const meta = document.createElement('p'); meta.className = 'meta'; meta.textContent = `${new Date(item.createdAt).toLocaleString('ja-JP')} · ${item.status}` + (item.endReason ? ' · ' + endLabel(item.endReason) : '');
     const condition = document.createElement('p'); condition.textContent = item.condition;
@@ -340,77 +276,38 @@ $('tts-form').addEventListener('submit', async event => {
 });
 $('tts-stop').onclick = () => api('/api/stop', {}).catch(error => status(error.message, true));
 $('refresh').onclick = () => refresh().catch(error => status(error.message, true));
-$('live-start').onclick = async () => {
-  if (busy) return; busy = true; liveStarting = true; stopping = false; const version = ++startupVersion; controls(); status('会話の準備中…');
-  try {
-    context = new AudioContext({ sampleRate: 16000 }); await context.resume();
-    if (version !== startupVersion) return;
-    if (!cfg.mock) {
-      const requestedStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
-      if (version !== startupVersion) { requestedStream.getTracks().forEach(track => track.stop()); return; }
-      stream = requestedStream;
-    }
-    await context.audioWorklet.addModule('/audio-worklet.js');
-    if (version !== startupVersion) return;
-    if (context.sampleRate !== 16000) throw new Error('16 kHzの音声入力に対応するブラウザを使用してください。');
-    capture = new AudioWorkletNode(context, 'capture', { numberOfInputs: 2, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit' });
-    playbackBus = context.createGain(); playbackBus.connect(capture, 0, 1); capture.connect(context.destination);
-    context.onstatechange = () => { if (liveReady && context?.state !== 'running') { status('音声処理が停止したためセッションを終了します。録音は一部欠損の可能性があります。', true); send({ type: 'stop' }); flushRecording(); } };
-    if (stream) { source = context.createMediaStreamSource(stream); source.connect(capture, 0, 0); }
-    capture.port.onmessage = ({ data }) => {
-      if (data.type === 'pcm' && !stopping) send({ type: 'audio', data: base64(data.buffer) });
-      if (data.type === 'flushed' && flushing && !stopping) { send({ type: 'activityEnd' }); flushing = false; controls(); }
-      if (data.type === 'recordingStarted') send({ type: 'recordingStarted', frameOrigin: data.frameOrigin });
-      if (data.type === 'recordingChunk') send({ type: 'recordingChunk', startFrame: data.startFrame, input: base64(data.input), playback: base64(data.playback) });
-      if (data.type === 'recordingDrift') send({ type: 'recordingDrift', frames: data.frames, currentFrame: data.currentFrame, origin: data.origin, drift: data.drift });
-      if (data.type === 'recordingEnd') { send({ type: 'recordingEnd', frames: data.frames }); send({ type: 'stop' }); cleanup(); }
-      if (data.type === 'recordingUnavailable') { send({ type: 'stop' }); cleanup(); }
-    };
-    if (version !== startupVersion) return;
-    liveStarting = false;
-    socket = new WebSocket(`ws://${location.host}/live`, ['wkfl', cfg.csrf]);
-    controls();
-    socket.onopen = () => send({ type: 'start', model: $('live-model').value, voice: voiceValue('live'), condition: $('live-condition').value, seconds: Number($('seconds').value), mode: $('turn-mode').value, ...(providerOf('live', $('live-model').value) === 'openai-live' ? { delegate: $('live-delegate').value } : {}) });
-    socket.onmessage = ({ data }) => {
-      const message = JSON.parse(data);
-      if (message.type === 'ready') {
-        capture.port.postMessage('record');
-        const apiMinutes = cfg.catalog.live.sessionLimits?.[$('live-model').value]?.minutes;
-        const limitSeconds = apiMinutes ? Math.min(message.seconds, apiMinutes * 60) : message.seconds;
-        liveReady = true; deadline = Date.now() + limitSeconds * 1000; resetTranscript(); $('session-summary').replaceChildren();
-        countdownTimer = setInterval(() => { const s = Math.max(0, Math.ceil((deadline - Date.now()) / 1000)); $('countdown').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }, 250);
-        if (!cfg.mock && $('turn-mode').value === 'automatic') { capture.port.postMessage('start'); $('talk').textContent = 'マイク送信中'; }
-        $('latency').textContent = cfg.mock ? 'デモ用のタイマーです。AIは応答しません。音声会話や応答速度の測定はできません。' : $('turn-mode').value === 'automatic' ? '自然会話：音声の区切りはサーバーが検出します。発話終了から実再生までの遅延は未計測です。' : '手動区切り：発話終了通知 → 最初の音声受信（サーバー）を計測します。';
-        status(cfg.mock ? 'デモ確認中です。会話はできません。「デモ音を再生」で合成テスト音だけを確認できます。' : $('turn-mode').value === 'automatic' ? '接続しました。そのまま話してください。マイク送信中です。' : '接続しました。「話し始める」でマイク送信を開始します。'); controls();
-      }
-      if (message.type === 'audio') playAudio(message.data);
-      if (message.type === 'drain') flushRecording();
-      if (message.type === 'interrupted') stopPlayback();
-      if (message.type === 'transcript') addTranscript(message);
-      if (message.type === 'metric') $('latency').textContent = `${cfg.mock ? 'MOCK / ' : ''}発話終了通知 → 最初の音声受信（サーバー）：${message.metric.value} ms。実再生開始の遅延ではありません。`;
-      if (message.type === 'error') status(message.message, true);
-      if (message.type === 'saved') { $('session-summary').replaceChildren(costView(message.item)); status('録音を保存しました。' + endLabel(message.item.endReason) + '。'); refresh().catch(error => status(error.message, true)); }
-    };
-    socket.onerror = () => status('接続できませんでした。設定を確認し、必要なら手動で再開してください。', true);
-    socket.onclose = () => { cleanup(); socket = null; busy = false; stopping = false; controls(); };
-  } catch (error) { if (version !== startupVersion) return; liveStarting = false; cleanup(); socket?.close(); socket = null; busy = false; controls(); status(error.message, true); }
+// The conversation runs on the shared live session (public/live-session.js); this page owns its controls.
+const liveEvents = {
+  status, changed: controls, transcript: message => transcriptView.add(message),
+  ready(message) {
+    const apiMinutes = cfg.catalog.live.sessionLimits?.[$('live-model').value]?.minutes;
+    const deadline = Date.now() + (apiMinutes ? Math.min(message.seconds, apiMinutes * 60) : message.seconds) * 1000;
+    transcriptView.reset(); $('session-summary').replaceChildren();
+    countdownTimer = setInterval(() => { $('countdown').textContent = formatClock(Math.max(0, Math.ceil((deadline - Date.now()) / 1000))); }, 250);
+    if (!cfg.mock && $('turn-mode').value === 'automatic') $('talk').textContent = 'マイク送信中';
+    $('latency').textContent = cfg.mock ? 'デモ用のタイマーです。AIは応答しません。音声会話や応答速度の測定はできません。' : $('turn-mode').value === 'automatic' ? '自然会話：音声の区切りはサーバーが検出します。発話終了から実再生までの遅延は未計測です。' : '手動区切り：発話終了通知 → 最初の音声受信（サーバー）を計測します。';
+    status(cfg.mock ? 'デモ確認中です。会話はできません。「デモ音を再生」で合成テスト音だけを確認できます。' : $('turn-mode').value === 'automatic' ? '接続しました。そのまま話してください。マイク送信中です。' : '接続しました。「話し始める」でマイク送信を開始します。');
+  },
+  metric(metric) { $('latency').textContent = `${cfg.mock ? 'MOCK / ' : ''}発話終了通知 → 最初の音声受信（サーバー）：${metric.value} ms。実再生開始の遅延ではありません。`; },
+  saved(item) { $('session-summary').replaceChildren(costView(item)); status('録音を保存しました。' + endLabel(item.endReason) + '。'); refresh().catch(error => status(error.message, true)); },
+  cleanup() { clearInterval(countdownTimer); $('talk').textContent = cfg?.mock ? 'デモ音を再生（会話ではありません）' : '話し始める'; $('talk').classList.remove('recording'); $('countdown').textContent = '—'; },
+  closed() { busy = false; controls(); },
+};
+$('live-start').onclick = () => {
+  if (busy) return; busy = true; controls(); status('会話の準備中…');
+  live.start({ model: $('live-model').value, voice: voiceValue('live'), condition: $('live-condition').value, seconds: Number($('seconds').value), mode: $('turn-mode').value, ...(providerOf('live', $('live-model').value) === 'openai-live' ? { delegate: $('live-delegate').value } : {}) });
 };
 $('talk').onclick = () => {
-  if (!liveReady || flushing) return;
-  if (cfg.mock) { send({ type: 'mockTurn' }); return; }
-  talking = !talking;
-  if (talking) { stopPlayback(); send({ type: 'activityStart' }); capture.port.postMessage('start'); status('マイク音声を送信中。話し終えたら「発話を送る」を押してください。'); }
-  else { flushing = true; capture.port.postMessage('stop'); status('応答を待っています…'); }
+  if (!live.ready || live.flushing) return;
+  if (cfg.mock) { live.talk(); return; }
+  const talking = live.talk();
+  status(talking ? 'マイク音声を送信中。話し終えたら「発話を送る」を押してください。' : '応答を待っています…');
   $('talk').textContent = talking ? '発話を送る' : '話し始める'; $('talk').classList.toggle('recording', talking); controls();
 };
-$('live-stop').onclick = () => {
-  ++startupVersion; liveStarting = false;
-  if (socket?.readyState === WebSocket.OPEN) { send({ type: 'stop' }); flushRecording(); }
-  else { cleanup(); socket?.close(); socket = null; busy = false; controls(); }
-};
-window.addEventListener('pagehide', () => { send({ type: 'stop' }); socket?.close(); cleanup(); });
+$('live-stop').onclick = () => live.stop();
 try {
   cfg = await api('/api/config');
+  live = createLiveSession({ csrf: cfg.csrf, mock: cfg.mock, on: liveEvents });
   const delegateLabels = { 'gpt-6-luna': '標準・低価格', 'gpt-6-sol': '高性能' };
   for (const model of cfg.catalog.live.delegates) { const option = document.createElement('option'); option.value = model; option.textContent = `${model}（${delegateLabels[model] || model}）`; $('live-delegate').append(option); }
   for (const kind of ['tts', 'live']) {

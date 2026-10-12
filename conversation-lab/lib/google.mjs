@@ -42,7 +42,8 @@ export async function synthesize(settings, { key, signal, mock, fetcher = fetch 
 export const liveGreetingPrompt = '会話が始まりました。日本語で「こんにちは、今日は何を話しましょうか」のように短く挨拶して、相手に話しかけてください。';
 export function liveSetup(settings) {
   return { setup: {
-    ...liveVoiceSetup({ model: settings.model, voice: settings.voice, instruction: `日本語で短く自然に対話してください。${settings.condition}` }),
+    // The studio's instruction defines the role (e.g. a show host), so its base line does not ask for brevity.
+    ...liveVoiceSetup({ model: settings.model, voice: settings.voice, instruction: settings.studio ? `日本語で自然に話してください。\n\n${settings.condition}` : `日本語で短く自然に対話してください。${settings.condition}` }),
     realtimeInputConfig: { automaticActivityDetection: settings.mode === 'manual' ? { disabled: true } : { disabled: false, silenceDurationMs: 700 } },
     inputAudioTranscription: {}, outputAudioTranscription: {},
     // Official session management: compression lifts the 15-minute audio-only limit; resumption
@@ -89,7 +90,8 @@ export function connectLive(settings, callbacks, { key, mock }) {
       // upstream: true marks provider-side unavailability, so the server does not blame the browser for it.
       if (closed || ws.readyState !== WebSocket.OPEN) throw Object.assign(new Error(`Live connection not open (state ${ws.readyState})`), { upstream: true });
       if (ws.bufferedAmount > 1024 * 1024) throw Object.assign(new Error('Live upstream backlog'), { upstream: true });
-      ws.send(JSON.stringify(message));
+      // A director cue reaches Gemini as text input, which it answers like the greeting.
+      ws.send(JSON.stringify(typeof message.instruction === 'string' ? { realtimeInput: { text: message.instruction } } : message));
     },
     close() { closed = true; ws.terminate(); },
   };

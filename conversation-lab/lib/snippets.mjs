@@ -49,7 +49,7 @@ export function realtimeSessionUpdate(settings) {
     session: {
       type: 'realtime',
       output_modalities: ['audio'],
-      instructions: `日本語で短く自然に対話してください。${settings.condition}`,
+      instructions: settings.studio ? `日本語で自然に話してください。\n\n${settings.condition}` : `日本語で短く自然に対話してください。${settings.condition}`,
       audio: {
         input: {
           format: { type: 'audio/pcm', rate: 24000 },
@@ -81,13 +81,14 @@ export function openaiVoiceSnippets(profile, { model, condition = '', checkedAt 
 // GPT-Live session start; lib/openai-live.mjs sends exactly this. Prompt structure follows
 // https://developers.openai.com/api/docs/guides/live-prompting (checked 2026-10-12).
 export const gptLiveDelegates = ['gpt-6-luna', 'gpt-6-sol'];
-export function liveSessionStart({ voice, condition = '', delegate = 'gpt-6-luna' }) {
+export function liveSessionStart({ voice, condition = '', delegate = 'gpt-6-luna', studio }) {
   return {
     type: 'session.start',
     session: {
       model: 'gpt-live-1',
       instructions: [
-        'あなたは日本語で話す議論の相手です。温かく自然に、落ち着いたペースで、はっきり話してください。ユーザーが別の言語を求めない限り日本語で話します。',
+        // In the studio the role comes from the show settings, so the lab's default role is left out.
+        `${studio ? '' : 'あなたは日本語で話す議論の相手です。'}温かく自然に、落ち着いたペースで、はっきり話してください。ユーザーが別の言語を求めない限り日本語で話します。`,
         '次のときはバックエンドに委任してください：考えを深める必要がある問い、反論や論点の整理、事実の確認が必要な話題。',
         '次のときは委任しないでください：会話の流れや届いている結果だけで答えられるとき、短い確認や相づち。',
         '委任した結果が届く前に答えを推測しないでください。待つ間は、考えていることを短く伝えてかまいません。',

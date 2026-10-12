@@ -98,6 +98,7 @@ export const catalog = {
     },
   },
 };
+import { validateStudio } from './studio.mjs';
 export const sampleText = 'こんにちは、カンバセーションラボです。同じ言葉でも、声と間の取り方で印象は変わります。今日は、日本語の自然さと聞き取りやすさを比べてみましょう。';
 export function validate(kind, body) {
   const c = catalog[kind];
@@ -105,7 +106,8 @@ export function validate(kind, body) {
   const voices = c?.voicesByProvider?.[provider] || c?.voices || [];
   if (!c || !c.models.includes(body.model) || !voices.includes(body.voice)) throw new Error('Invalid model or voice');
   const condition = typeof body.condition === 'string' ? body.condition.trim() : '';
-  if (condition.length > 1000) throw new Error('Condition is too long');
+  // Studio instructions are built from several settings and run longer than a lab condition.
+  if (condition.length > (body.studio ? 12000 : 1000)) throw new Error('Condition is too long');
   const result = { provider, model: body.model, voice: body.voice, condition };
   if (kind === 'tts') {
     if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 1500) throw new Error('Text must contain 1–1500 characters');
@@ -115,6 +117,8 @@ export function validate(kind, body) {
     result.seconds = body.seconds;
     if (!['automatic', 'manual'].includes(body.mode)) throw new Error('Invalid turn mode');
     result.mode = body.mode;
+    if (body.opening !== undefined) { if (typeof body.opening !== 'string' || body.opening.length > 2000) throw new Error('Invalid opening'); result.opening = body.opening.trim(); }
+    if (body.studio !== undefined) result.studio = validateStudio(body.studio);
     if (provider === 'openai-live') {
       if (body.mode !== 'automatic') throw new Error('GPT-Live is full duplex; manual turns are not supported');
       const delegate = body.delegate ?? c.delegates[0];

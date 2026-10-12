@@ -15,6 +15,7 @@ import { Timeline } from './lib/timeline.mjs';
 import { Store } from './lib/store.mjs';
 import { summarizeLive } from './lib/cost.mjs';
 import { TranscriptGrouper } from './lib/transcript.mjs';
+import { studioCues } from './lib/studio.mjs';
 import { demoSettings, demoSets, publicDemoSettings, readDemos } from './lib/voice-demos.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -100,9 +101,10 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
         res.setHeader('Content-Type', 'audio/wav'); res.end(readFileSync(path)); return;
       }
       if (req.method === 'GET' && pathname === '/cost.mjs') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end(readFileSync(join(root, 'lib/cost.mjs'))); return; }
+      if (req.method === 'GET' && pathname === '/studio.mjs') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end(readFileSync(join(root, 'lib/studio.mjs'))); return; }
       if (req.method === 'GET' && pathname === '/transcript.mjs') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end(readFileSync(join(root, 'lib/transcript.mjs'))); return; }
       if (req.method === 'GET' && pathname === '/snippets.mjs') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end(readFileSync(join(root, 'lib/snippets.mjs'))); return; }
-      const files = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript'], '/audio-worklet.js': ['audio-worklet.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
+      const files = { '/': ['index.html', 'text/html; charset=utf-8'], '/studio': ['studio.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript'], '/studio.js': ['studio.js', 'text/javascript'], '/live-session.js': ['live-session.js', 'text/javascript'], '/shared.js': ['shared.js', 'text/javascript'], '/audio-worklet.js': ['audio-worklet.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
       if (req.method === 'GET' && files[pathname]) {
         res.setHeader('Content-Type', files[pathname][1]); res.end(readFileSync(join(root, 'public', files[pathname][0]))); return;
       }
@@ -249,7 +251,8 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
           if (!isCurrent()) return;
           ready = true; speaking = settings.mode === 'automatic'; clearTimeout(initialTimer); send({ type: 'ready', id: item.id, seconds: settings.seconds, mock });
           if (mock) return;
-          try { upstream.send({ realtimeInput: { text: liveGreetingPrompt } }); item.events.push({ type: 'greeting-requested', atMs: now() }); }
+          // The studio sends its own opening cue (e.g. start the show); the model lab uses the greeting.
+          try { upstream.send({ realtimeInput: { text: settings.opening || liveGreetingPrompt } }); item.events.push({ type: 'greeting-requested', atMs: now() }); }
           catch (error) { item.events.push({ type: 'server-error', atMs: now(), stage: 'greeting', error: String(error?.message).slice(0, 200) }); requestFinish('provider-unavailable'); }
         },
         error(info = {}) {
@@ -304,6 +307,13 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
           // Mock mode always uses the synthetic tone path, whatever the provider.
           connect = mock ? provider.connectLive : settings.provider === 'openai-live' ? provider.connectGptLive : openai ? provider.connectRealtime : provider.connectLive;
           upstream = open(settings, true);
+          return;
+        }
+        // Director cues from the studio. Forwarded as an instruction; a failure is logged, never fatal.
+        if (message.type === 'cue' && ready && item) {
+          const entry = { type: 'cue', atMs: now(), cue: typeof message.cue === 'string' ? message.cue.slice(0, 40) : null }, text = studioCues[message.cue];
+          if (!text) { log({ ...entry, error: 'Unknown cue' }, 20); return; }
+          try { upstream?.send({ instruction: text }); log(entry, 20); } catch (error) { log({ ...entry, error: String(error?.message).slice(0, 200) }, 20); }
           return;
         }
         if (!ready || !item) throw new Error('Session not ready');

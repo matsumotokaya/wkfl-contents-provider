@@ -12,6 +12,9 @@ export function toRealtimeEvents(message) {
   const input = message.realtimeInput || {};
   if (input.audio) return [{ type: 'input_audio_buffer.append', audio: upsample16kTo24k(Buffer.from(input.audio.data, 'base64')).toString('base64') }];
   if (typeof input.text === 'string') return [{ type: 'response.create', response: { instructions: input.text } }];
+  // A director cue becomes a system message the model reads at its next reply; forcing a reply could
+  // collide with one in progress.
+  if (typeof message.instruction === 'string') return [{ type: 'conversation.item.create', item: { type: 'message', role: 'system', content: [{ type: 'input_text', text: message.instruction }] } }];
   if (input.activityStart) return [{ type: 'input_audio_buffer.clear' }];
   if (input.activityEnd) return [{ type: 'input_audio_buffer.commit' }, { type: 'response.create' }];
   return [];
@@ -38,7 +41,11 @@ export function connectRealtime(settings, callbacks, { key, Socket = WebSocket }
     if (closed) return;
     try {
       const event = JSON.parse(data.toString());
-      if (event.type === 'error') return callbacks.error({ detail: redactProviderBody(JSON.stringify(event.error)).slice(0, 500) });
+      if (event.type === 'error') {
+        // Before setup an error ends the session; after it, a rejected command is recorded and the conversation goes on.
+        const detail = redactProviderBody(JSON.stringify(event.error)).slice(0, 500);
+        return configured ? callbacks.message({ providerEvent: { name: 'error', detail } }) : callbacks.error({ detail });
+      }
       if (event.type === 'session.updated' && !configured) { configured = true; callbacks.ready(); return; }
       if (event.type === 'input_audio_buffer.speech_started' && event.item_id) {
         speechStarts.set(event.item_id, performance.now());

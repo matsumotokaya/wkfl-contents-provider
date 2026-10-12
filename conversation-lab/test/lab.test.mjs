@@ -269,6 +269,28 @@ test('a Gemini session continues on a resumed connection after GoAway or an unex
   assert.equal(item.events.filter(e => e.type === 'server-error').length, 0);
   ws.terminate();
 });
+test('a studio session opens with its own cue, forwards director cues, and records the show settings', async t => {
+  const connections = [];
+  const provider = { synthesize, connectLive: (settings, cb) => { const c = { settings, sent: [], send(m) { c.sent.push(m); }, close() {} }; connections.push(c); setTimeout(() => cb.ready(), 5); return c; } };
+  const f = await fixture(t, { provider }); const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
+  const studio = { useCase: 'podcast', format: 'interview', title: 'テスト番組', theme: 'アプリ', guest: '松本' };
+  ws.send(JSON.stringify({ ...start, mode: 'automatic', condition: 'あ'.repeat(3000), opening: '収録を始めます。', studio })); await next('ready');
+  ws.send(JSON.stringify({ type: 'cue', cue: 'wrap-up' }));
+  ws.send(JSON.stringify({ type: 'cue', cue: 'no-such-cue' }));
+  ws.send(JSON.stringify({ type: 'stop' })); const { item } = await next('saved');
+  // The mock provider skips the greeting; the first real message would be the opening, checked below.
+  assert.match(connections[0].sent.find(m => m.instruction)?.instruction, /進行の合図/);
+  assert.equal(connections[0].settings.opening, '収録を始めます。');
+  assert.deepEqual(item.studio, studio); assert.equal(item.endReason, 'stopped');
+  assert.deepEqual(item.events.filter(e => e.type === 'cue').map(e => [e.cue, e.error ?? null]), [['wrap-up', null], ['no-such-cue', 'Unknown cue']]);
+  ws.terminate();
+});
+test('the studio page and its modules are served', async t => {
+  const f = await fixture(t);
+  for (const [path, type] of [['/studio', 'text/html'], ['/studio.js', 'text/javascript'], ['/studio.mjs', 'text/javascript'], ['/live-session.js', 'text/javascript'], ['/shared.js', 'text/javascript']]) {
+    const response = await request(f.url, path); assert.equal(response.status, 200, path); assert.match(response.headers['content-type'], new RegExp(type));
+  }
+});
 test('recording bookkeeping problems are logged and never end the session', async t => {
   const f = await fixture(t);
   const { ws, next } = live(f.url, f.config.csrf); await once(ws, 'open');
