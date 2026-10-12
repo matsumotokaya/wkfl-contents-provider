@@ -1,5 +1,5 @@
 import { summarizeLive } from '/cost.mjs';
-import { useCases, hostPresets, interviewStyles, defaultInterview, buildInterview } from '/studio.mjs';
+import { useCases, hostPresets, interviewStyles, defaultInterview, builtinPresets, buildInterview } from '/studio.mjs';
 import { createLiveSession } from '/live-session.js';
 import { $, externalLink, endLabel, formatClock, createTranscriptView, savedTranscript } from '/shared.js';
 
@@ -15,6 +15,8 @@ const genderLabel = { female: '女性', male: '男性', neutral: 'ニュート�
 
 // Settings stay in this browser only: the last values and named presets. Losing them is harmless.
 const storageKey = 'conversation-lab.studio.v1';
+// Last-used values from before this version are ignored once, so new defaults (Aoede, the basic show) show up.
+const lastVersion = 2;
 function readStore() { try { return JSON.parse(localStorage.getItem(storageKey)) || {}; } catch { return {}; } }
 function writeStore(value) { try { localStorage.setItem(storageKey, JSON.stringify(value)); } catch { /* Kept for this page only. */ } }
 const settings = () => Object.fromEntries(fields.map(id => [id, $(id).value]));
@@ -24,20 +26,30 @@ function update() {
   $('prompt').textContent = `${built.instruction}\n\n--- 開始の合図 ---\n${built.opening}`;
   $('host-note').textContent = hostPresets.find(p => p.id === $('host').value)?.text || '';
   $('style-note').textContent = interviewStyles.find(p => p.id === $('style').value)?.text || '';
-  const store = readStore(); store.last = { ...settings(), model: $('model').value, voice: $('voice').value }; writeStore(store);
+  const store = readStore(); store.last = { version: lastVersion, ...settings(), model: $('model').value, voice: $('voice').value }; writeStore(store);
 }
+const builtinPrefix = 'builtin:';
 function renderPresets(selected = '') {
   const saved = readStore().saved || {}, select = $('preset');
-  select.replaceChildren(new Option('（選ぶと読み込みます）', ''), ...Object.keys(saved).sort().map(name => new Option(name, name)));
+  const builtin = document.createElement('optgroup'); builtin.label = '基本のプリセット';
+  builtin.append(...builtinPresets.map(p => new Option(p.name, builtinPrefix + p.name)));
+  const mine = document.createElement('optgroup'); mine.label = '保存した設定';
+  mine.append(...Object.keys(saved).sort().map(name => new Option(name, name)));
+  select.replaceChildren(new Option('（選ぶと読み込みます）', ''), builtin, ...(mine.children.length ? [mine] : []));
   select.value = saved[selected] ? selected : '';
 }
-$('preset').onchange = () => { const saved = readStore().saved || {}; if (saved[$('preset').value]) { apply(saved[$('preset').value]); $('preset-name').value = $('preset').value; status(`「${$('preset').value}」を読み込みました。`); } };
+$('preset').onchange = () => {
+  const value = $('preset').value, saved = readStore().saved || {};
+  const builtin = value.startsWith(builtinPrefix) && builtinPresets.find(p => builtinPrefix + p.name === value);
+  if (builtin) { apply(builtin.settings); status(`「${builtin.name}」を読み込みました。`); return; }
+  if (saved[value]) { apply(saved[value]); $('preset-name').value = value; status(`「${value}」を読み込みました。`); }
+};
 $('preset-save').onclick = () => {
   const name = $('preset-name').value.trim(); if (!name) { status('保存する名前を入れてください。', true); return; }
   const store = readStore(); store.saved = { ...store.saved, [name]: settings() }; writeStore(store); renderPresets(name); status(`「${name}」として保存しました（このブラウザ内）。`);
 };
 $('preset-delete').onclick = () => {
-  const name = $('preset').value; if (!name) return;
+  const name = $('preset').value; if (!name || name.startsWith(builtinPrefix)) return;
   const store = readStore(); delete store.saved?.[name]; writeStore(store); renderPresets(); status(`「${name}」を削除しました。`);
 };
 
@@ -118,7 +130,7 @@ try {
   $('style').replaceChildren(...interviewStyles.map(p => new Option(p.name, p.id)));
   for (const model of cfg.catalog.live.models) $('model').append(new Option(`${model}（${{ openai: 'OpenAI Realtime', 'openai-live': 'OpenAI GPT-Live' }[providerOf(model)] || 'Google Live'}）`, model));
   for (const model of cfg.catalog.live.delegates) $('delegate').append(new Option(model, model));
-  const last = readStore().last || {};
+  const stored = readStore().last, last = stored?.version === lastVersion ? stored : {};
   if (cfg.catalog.live.models.includes(last.model)) $('model').value = last.model;
   renderVoices(last.voice); renderPresets(); apply({ ...defaultInterview, ...last });
   live = createLiveSession({ csrf: cfg.csrf, mock: cfg.mock, on: {

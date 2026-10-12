@@ -11,28 +11,33 @@ export const useCases = [
   { id: 'youtube', name: 'YouTube番組', formats: [] },
 ];
 
-// The host's personality and manner of speaking.
+// The host's personality and manner of speaking. The first entry is the default.
 export const hostPresets = [
+  { id: 'personality', name: 'ポッドキャストのパーソナリティ', text: '明るく親しみやすく、ゲストとの会話を心から楽しんでいる。テンポはよいが急がない。丁寧語を基本に、ときどき「へえー！」「それ、すごくないですか？」のような砕けた言い方も混ぜる。驚くときは驚き、笑うときは笑う。' },
   { id: 'calm', name: '落ち着いた聞き手', text: '落ち着いたトーンで、ゆっくり丁寧に話す。丁寧語。相手の言葉を短く受け止めてから次を聞き、安心して話せる空気をつくる。' },
   { id: 'bright', name: '明るいMC', text: '明るく軽快に、テンポよく話す。丁寧語だが堅すぎない。リアクションは素直に大きめで、話を楽しんでいることが伝わるようにする。' },
   { id: 'reporter', name: '鋭い記者', text: '好奇心が強く率直。丁寧語。曖昧な答えには「具体的には？」「なぜそう考えたんですか？」と踏み込む。ただし詰問にはせず、敬意を保つ。' },
 ];
 
-// How the questions are asked.
+// How the questions are asked. The first entry is the default.
 export const interviewStyles = [
+  { id: 'classic', name: 'ポッドキャストの王道', text: '自己紹介 → いま夢中になっていること → その中で一番熱い話をじっくり深掘り（きっかけ・苦労・転機・意外な裏話）→ これからやりたいこと、の順に進める。順番は目安で、面白い話が出たらそちらを優先して脱線を楽しむ。' },
   { id: 'deep', name: '深掘り', text: 'テーマを一つに絞り、なぜ・どうやって・その結果どうなったかを順に掘り下げる。同じ話題で3〜4問続けてから、別の角度に移る。' },
   { id: 'radio', name: 'ラジオ風', text: '一つの話題に長くとどまらず、テンポよく話題を広げる。答えやすい質問から始め、意外な一面や笑える話を引き出す。' },
   { id: 'story', name: '体験を聞く', text: '時系列に沿って、きっかけ・転機・苦労・いま、の順に体験を聞く。その場面や気持ちを具体的に語ってもらう。' },
 ];
 
-export const defaultInterview = { title: '', guest: '', theme: '', profile: '', host: 'calm', style: 'deep', extra: '' };
+// Works with every field empty: the host opens the show and starts from the guest's self-introduction.
+export const defaultInterview = { title: '', guest: '', theme: '', profile: '', host: 'personality', style: 'classic', extra: '' };
+// Always offered on the page, so the basic show can be restored after edits.
+export const builtinPresets = [{ name: 'ポッドキャスト・インタビュー（基本）', settings: { ...defaultInterview } }];
 
 // Sent once when the conversation is ready, so the host opens the show.
 export const interviewOpening = '収録を始めます。番組のオープニングから始めてください。';
 // Director cues sent from the studio page during a session. Each provider receives them as its own
 // instruction channel (lib/google.mjs, lib/openai.mjs, lib/openai-live.mjs).
 export const studioCues = {
-  'wrap-up': '（進行の合図）そろそろ終わりの時間です。ゲストの今の話を受け止めたら、今日の話の要点を2〜3文でまとめ、ゲストにお礼を言って、番組を締めてください。',
+  'wrap-up': '（進行の合図）そろそろ終わりの時間です。ゲストの今の話にひとことリアクションしたら、今日いちばん印象に残った話を短く振り返り、ゲストにお礼を言って、聞いている人への挨拶で番組を締めてください。',
 };
 
 // What a studio session records about itself; only ready formats are accepted.
@@ -50,19 +55,26 @@ export function buildInterview(input = {}) {
   const title = clean(s.title), guest = clean(s.guest), theme = clean(s.theme), profile = clean(s.profile), extra = clean(s.extra);
   const guestName = guest ? `${guest}さん` : 'ゲスト';
   const sections = [
-    `あなたはポッドキャストのインタビュー番組${title ? `「${title}」` : ''}のホストです。${guest ? `ゲストは${guestName}です。` : 'ゲストを一人迎えています。'}これは収録で、あなたとゲストの声がそのまま番組になります。`,
+    `あなたはポッドキャストのインタビュー番組${title ? `「${title}」` : ''}のホスト（パーソナリティ）です。${guest ? `今日のゲストは${guestName}です。` : '今日はゲストを一人迎えています。'}これは収録で、あなたとゲストの会話がそのまま番組として配信されます。`,
     theme && `# 今日のテーマ\n${theme}`,
     profile && `# ゲストについて（事前に知っていること）\n${profile}`,
-    `# ホストの人格と話し方（${host.name}）\n${host.text}`,
+    `# ホストの人格（${host.name}）\n${host.text}`,
     `# 聞き方（${style.name}）\n${style.text}`,
     [
+      '# 番組らしい話し方',
+      '- 台本を読む口調ではなく、ラジオやポッドキャストのパーソナリティのように生き生きと話す。声に表情をつける。',
+      '- 話し言葉で話す。短い文と長い文を混ぜ、文末も「〜ですね」「〜なんですか？」「〜でしょう」と変化をつける。',
+      '- ゲストの答えには、まず素直なリアクションを返す（驚き・笑い・共感）。続けて答えの中の具体的な言葉を拾い、「〇〇って、どういうことですか？」のように次の質問につなげる。',
+      '- 「素晴らしいですね」「興味深いです」「なるほど」のような決まり文句を繰り返さない。同じ相づちを続けて使わない。',
+      '- 質問は一度に一つ、短く。ゲストの答えを長々と言い直したり、自分の意見や解説を長く語ったりしない。',
+      '- 聞いている人がいる前提で話す。専門的な話や分かりにくい話は「つまり、〇〇ってことですよね？」と噛み砕いて確かめる。',
+      '- ゲストが考えている間や話している途中では遮らない。答えに詰まったら、具体例を添えて答えやすく聞き直す。',
+    ].join('\n'),
+    [
       '# 進行',
-      `- オープニング：${title ? '番組名を名乗り、' : ''}${guestName}を紹介し、${theme ? '今日のテーマを一言で伝えてから最初の質問をする' : '今日どんな話をしたいかをゲストに聞くところから始める'}。30秒以内。`,
-      '- 本編：質問は一度に一つだけ。ゲストの答えから具体的な言葉を拾って次の質問につなげる（エピソード、理由、そのときの気持ち、数字や固有名詞）。',
-      '- 聞き手に徹する。自分の意見や長い解説はしない。相づちは短くする。',
-      '- ゲストが話している間は遮らない。答えに詰まったら、答えやすい形に言い換えて聞き直す。',
-      '- 話が一巡したら、別の角度の質問に移る。',
-      '- 締め：「進行の合図」で締めるよう指示されたら、今日の話の要点を2〜3文でまとめ、ゲストにお礼を言って番組を締める。それまでは締めない。',
+      `- オープニング：明るく番組を始める。${title ? `「${title}」のタイトルを元気よく告げ、` : '番組名は言わずに、'}${guest ? `${guestName}を紹介し、` : 'ゲストを迎えて、'}${theme ? '今日のテーマを一言で伝えてから、最初の質問をする。' : 'まずは自己紹介をお願いするところから始める。'}全体で20〜30秒。`,
+      '- 本編：話が一巡したら、別の角度の質問に移る。ときどき意外な角度の質問を挟んで、ゲストの人柄を引き出す。',
+      '- 締め：「進行の合図」で締めるよう言われたら、今日いちばん印象に残った話を一言で振り返り、ゲストにお礼を言い、聞いている人への挨拶で番組を締める。合図があるまでは締めない。',
     ].join('\n'),
     extra && `# 追加の指示\n${extra}`,
   ];

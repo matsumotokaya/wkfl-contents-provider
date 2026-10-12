@@ -9,6 +9,7 @@ test('every selectable voice has a profile with gender, style and demo link', ()
   for (const kind of ['tts', 'live']) {
     assert.deepEqual([...catalog[kind].voices].sort(), [...names].sort());
     assert.ok(catalog[kind].voices.includes(catalog[kind].defaultVoice));
+    if (kind === 'live') assert.equal(catalog.live.defaultVoiceByProvider.google, 'Aoede');
   }
   for (const v of voiceProfiles.voices) {
     assert.ok(['female', 'male', 'neutral'].includes(v.gender), v.name);

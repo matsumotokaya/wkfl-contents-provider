@@ -78,8 +78,9 @@ export const catalog = {
     // 公式：native audio出力モデルはTTSの全プリセット声に対応。
     voices: [...voiceNames],
     voicesByProvider: { google: [...voiceNames], openai: [...openaiVoiceNames], 'openai-live': [...gptLiveVoiceNames] },
-    defaultVoice: 'Kore',
-    defaultVoiceByProvider: { google: 'Kore', openai: 'marin', 'openai-live': 'marin' },
+    // Live default is Aoede in both the model lab and the studio (2026-10-12, user's choice). TTS stays Kore.
+    defaultVoice: 'Aoede',
+    defaultVoiceByProvider: { google: 'Aoede', openai: 'marin', 'openai-live': 'marin' },
     source: 'https://ai.google.dev/gemini-api/docs/live-api/capabilities#change-voice-and-language',
     status: 'gemini-3.8-live / Koreは1回の接続と最初の音声チャンク受信を確認。マイク会話・声質・他の声は未検証。TTSとの同一声質は保証しません。',
     // Official per-session limits (checked 2026-10-12). The app's own limit is only a spending guard;

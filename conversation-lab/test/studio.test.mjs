@@ -28,7 +28,8 @@ test('the interview instruction carries the show settings and the chosen presets
   assert.deepEqual(built.studio, { useCase: 'podcast', format: 'interview', title: 'WKFL インタビュー', theme: '新規事業のアプリ', guest: '松本' });
   const blank = buildInterview({});
   assert.match(blank.instruction, /ゲストを一人迎えています/); assert.doesNotMatch(blank.instruction, /ゲストはゲスト/);
-  assert.match(blank.instruction, /今日どんな話をしたいかをゲストに聞く/);
+  assert.match(blank.instruction, /まずは自己紹介をお願いする/); assert.match(blank.instruction, /# 番組らしい話し方/);
+  assert.match(blank.instruction, /ポッドキャストのパーソナリティ/); assert.match(blank.instruction, /ポッドキャストの王道/);
   assert.doesNotMatch(blank.instruction, /# 今日のテーマ|# 追加の指示|番組「|テーマを一言で/);
 });
 test('only ready formats are accepted, and studio settings pass through validation', () => {
