@@ -22,7 +22,7 @@
 読み込みは `tools/credentials.mjs` の `loadMinimaxKey`。絶対パスの `MINIMAX_API_KEY_FILE` があればそちらを優先する。一般の `MINIMAX_API_KEY` 環境変数は読まない（どこかの `.env` で課金先が変わらないように）。
 残高は同じアカウントの前払い枠から減る。コンソールの使用量はキーごとに分かれて出る。
 
-**配置済み（2026-10-14）**：gen-video の `.env` にある従量課金の `MINIMAX_API_KEY` を、ユーザー承認のうえ値を表示せずにコピーした（新規発行ではない）。同日、このキーで無料の `get_voice` を呼び、`nijiVoiceRefA01` が見えることを確認した。gen-video の `.env` には同じキーが残っていて、gen-video はまだそちらを読んでいる。サブスクキー `MINIMAX_SUBSCRIPTION_KEY` は gen-video に残したまま。
+**配置済み（2026-10-14）**：gen-video の `.env` にある従量課金の `MINIMAX_API_KEY` を、ユーザー承認のうえ値を表示せずにコピーした（新規発行ではない）。同日、このキーで無料の `get_voice` を呼び、`nijiVoiceRefA01` が見えることを確認した。gen-video も同日からこのファイルを読む（`src/config.ts`。環境変数 `MINIMAX_API_KEY` があればそちらが優先）。gen-video の `.env` からは `MINIMAX_API_KEY` を外した（gen-video コミット `ac5142d`）。サブスクキー `MINIMAX_SUBSCRIPTION_KEY` は gen-video に残したまま。
 
 ## ラボでの使い方
 
@@ -81,4 +81,4 @@ IEEE Float の wav は `ffmpeg -acodec pcm_s16le -ar 32000 -ac 1` で変換す�
 
 ## 試作音声
 
-gen-video の `projects/2026-08-12_voice/` の README と mp3 9本（`keep/` 5本、`takes/` 4本）を `data/imports/gen-video-voice/` にコピーした（Git 対象外、2026-10-14、チェックサム一致）。gen-video 側の元ファイルはまだ消していない。
+gen-video の `projects/2026-08-12_voice/` の README と mp3 9本（`keep/` 5本、`takes/` 4本）を `data/imports/gen-video-voice/` にコピーした（Git 対象外、2026-10-14、チェックサム一致）。gen-video 側の元ファイルと `docs/voice.md` は、移し先を確かめたうえで gen-video が削除した（`ac5142d`）。ここが唯一の置き場所。
