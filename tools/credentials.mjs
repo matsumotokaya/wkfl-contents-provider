@@ -1,12 +1,10 @@
-// Shared by WKFL TTS Studio and Conversation Lab. Resolve one provider only.
+// Shared by TTS Studio and Conversation Lab (repo-level, depends on neither app). Resolve one provider only.
 // Which AI Studio / OpenAI project each key belongs to: ~/playbooks/gemini-tts.md and conversation-lab/CREDENTIALS.md.
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, isAbsolute, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 const defaultRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const requireStudio = createRequire(new URL('../tts-studio/package.json', import.meta.url));
 
 export function credentialSource({ env = process.env, home = homedir(), repoRoot = defaultRoot } = {}) {
   if (env.GEMINI_API_KEY_FILE) {
@@ -31,15 +29,27 @@ export function loadGoogleKey({ env = process.env, home = homedir(), repoRoot = 
     if (!value) throw new Error('Empty credential file');
     return value;
   }
-  // Parse without global injection, logging, or copying credentials. dotenv is
-  // needed only for the existing Studio's legacy compatibility path (Node 18+).
+  // Legacy compatibility: read only GEMINI_API_KEY, without global injection, logging, or copying.
+  // Parsed here so this shared module does not depend on either app's node_modules.
   for (const path of [join(repoRoot, 'tts-studio', '.env'), join(repoRoot, '.env')]) {
     if (!existsSync(path)) continue;
-    const { parse } = requireStudio('dotenv');
-    const value = parse(readFileSync(path, 'utf8')).GEMINI_API_KEY?.trim();
+    const value = envValue(readFileSync(path, 'utf8'), 'GEMINI_API_KEY');
     if (value) return value;
   }
   throw new Error('WKFL Google credential is not configured');
+}
+
+// Last declaration wins, as with dotenv.
+function envValue(text, name) {
+  let value;
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^\s*(?:export\s+)?([\w.-]+)\s*=\s*(.*)$/);
+    if (!m || m[1] !== name) continue;
+    const raw = m[2].trim();
+    const quoted = raw.match(/^(['"`])(.*)\1$/);
+    value = (quoted ? quoted[2] : raw.replace(/\s+#.*$/, '')).trim();
+  }
+  return value;
 }
 
 // OpenAI (Conversation Lab Realtime). Only an explicit file or the central WKFL file: the plain

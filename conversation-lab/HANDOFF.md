@@ -85,7 +85,7 @@ Gemini 3.8 Liveのみ上部に公式料金とトークン例、下部に日本�
 | `lib/cost.mjs` | 2026-10-11確認の料金スナップショット、純粋な使用量概算関数。サーバーと画面で共用 |
 | `lib/store.mjs` | JSON/WAV保存。新規Live終了時は料金スナップショットも保存 |
 | `lib/timeline.mjs` | 共通サンプル時間軸から録音を組み立てる |
-| `../tools/credentials.mjs` | WKFL専用キーの共通解決。旧TTS Studioも使用 |
+| `../tools/credentials.mjs` | WKFL専用キーの共通解決。TTS Studioも使用 |
 | `test/` | 外部接続を禁止したモックと純粋関数テスト |
 | `data/experiments/<UUID>/` | 実接続の録音・metadata.json。Git対象外 |
 | `data/mock/<UUID>/` | 合成音の検証記録。Git対象外 |

@@ -1,5 +1,7 @@
 # WKFL TTS Studio
 
+> **役割**: WKFL番組の制作ライン（完成台本→番組音声）。声選びやリアルタイム会話の研究は `../conversation-lab/` の担当で、こちらとは別物。両者は依存を持たない。役割分担の正本は [ルートREADME「音声ツールの役割分担」](../README.md#音声ツールの役割分担2026-10-14-決定)。
+
 podcast台本（`articles/{date}/*_podcast.md`）から、ナレーション音声＋字幕タイミングJSONを生成するパイプライン。
 元はAI Studio上のWebアプリ（`gemini-tts-converter/`、移植完了に伴い削除済み）のコアロジックをNode.jsに移植し、WKFLのワークフローに組み込んだもの。
 
@@ -59,7 +61,7 @@ npm run ui   # → http://localhost:8787
 
 APIキーはサーバー側のみで使用し、ブラウザには渡らない。
 
-旧TTS StudioとConversation Labは `../tools/credentials.mjs` を共用し、WKFL専用の `~/.secrets/wkfl/gemini-token` を中央保存先とする。優先順は明示的な `GEMINI_API_KEY_FILE` → プロセスの `GEMINI_API_KEY` → WKFL専用中央ファイル → 移行前互換の `tts-studio/.env` → WKFL `.env`。必要なGoogleキーだけを取り出し、`.env`全体を環境変数へ注入しない。モックではキーを読まない。
+TTS StudioとConversation Labは `../tools/credentials.mjs` を共用し、WKFL専用の `~/.secrets/wkfl/gemini-token` を中央保存先とする。優先順は明示的な `GEMINI_API_KEY_FILE` → プロセスの `GEMINI_API_KEY` → WKFL専用中央ファイル → 移行前互換の `tts-studio/.env` → WKFL `.env`。必要なGoogleキーだけを取り出し、`.env`全体を環境変数へ注入しない。モックではキーを読まない。
 
 2026-10-11にユーザー承認でWKFL専用キーを中央保存済み。旧`.env`は両方保持し、削除は別承認後に行う。具体的な元ファイル、移行順序、旧設定の扱いは [資格情報移行計画](../conversation-lab/CREDENTIALS.md)。新規のrepo内`.env`へのキー保存は推奨しない。非秘密設定（`WKFL_TTS_MOCK`等）はプロセス環境で渡す。
 

@@ -317,6 +317,21 @@ AIポッドキャストパーソナリティ「WKFL」のスタイルで、3つ�
 3. **`tts-studio/` でTTS音声＋タイミングJSONを生成する**（下記）
 4. 必要に応じて動画化（Remotion）、番組として仕上げる
 
+### 音声ツールの役割分担（2026-10-14 決定）
+
+音声まわりのツールは2つあり、**用途が違うので統合しない**。迷ったらここを正本とする。
+
+| | `tts-studio/` | `conversation-lab/` |
+|---|---|---|
+| 役割 | WKFL番組の**制作ライン**。書き上がった台本を音声にする | 声・モデルの**リファレンスとリアルタイム会話の研究**（「受動的な発信」、将来の公開サービス） |
+| 入力 | `*_podcast.md`（完成台本） | 生の会話（マイク）・短文の試し読み |
+| 出力 | BGMミックス済み `episode.wav` ＋字幕タイミングJSON → `video/` へ | 声カタログ・会話録音・比較結果 |
+| TTSの扱い | 本番の量産 | 声を選ぶための試聴・1回生成のみ |
+
+- 依存は互いに持たない（`node_modules` もそれぞれ独立）。共有してよいのは `tools/` の共通部品だけ（今は `tools/credentials.mjs`）。
+- ラボで確かめた知見（新しいTTSモデルの呼び方など）は、コードをつなげずにTTS Studioへ移植する。
+- ラボの `/studio` の録音にBGMを付けたくなったら、ミックス処理を `tools/` に切り出して両方から使う。UIは統合しない。
+
 ### TTS生成（tts-studio/ — 自動化済み）
 
 旧来はGoogle AI Studio上のWebアプリで手動生成していたが、そのロジックをNode.jsに移植し、リポジトリ内で完結するようにした。**手順の正本は [tts-studio/README.md](tts-studio/README.md)。**
@@ -332,7 +347,7 @@ npm run ui   # → http://localhost:8787
 - モデル: `gemini-3.1-flash-tts-preview`（`tts-studio/config.json` で変更可）
 - BGMミックス（ダッキング・フェード）込みで出力。BGMプリセットは `config.json` で管理
 - 出力はそのまま `video/prepare.mjs` に渡せる
-- Googleキー: WKFL専用の `~/.secrets/wkfl/gemini-token` を旧TTSとConversation Labで共通参照。実体移行前は旧`.env`へfallback（[移行計画](conversation-lab/CREDENTIALS.md)）。
+- Googleキー: WKFL専用の `~/.secrets/wkfl/gemini-token` をTTS StudioとConversation Labで共通参照（`tools/credentials.mjs`）。実体移行前は旧`.env`へfallback（[移行計画](conversation-lab/CREDENTIALS.md)）。
 - 旧Webアプリ（`gemini-tts-converter/`）はtts-studioへの移植・統合が完了したため削除済み
 
 ### 使用できるプリセットボイス
@@ -398,7 +413,9 @@ WKFL/
 │       ├── freetalk_dossier.md
 │       ├── episode.wav           ← tts-studio が生成するナレーション音声
 │       └── episode.json          ← tts-studio が生成するタイムスタンプJSON
-├── tts-studio/            ← TTSパイプライン（CLI + チューニングUI。手順は tts-studio/README.md）
+├── tts-studio/            ← 番組音声の制作ライン（台本→音声＋字幕JSON。手順は tts-studio/README.md）
+├── conversation-lab/      ← 声のリファレンス＋リアルタイム会話の研究（TTS Studioとは別物。役割分担は「Podcast工程」）
+├── tools/                 ← 複数ツールで共有する部品（credentials.mjs 等）
 ├── video/                 ← Remotionプロジェクト（動画制作。手順は video/README.md）
 ├── app/                   ← プロジェクトのエンジン本体（収集・生成パイプライン + 停止中のWeb UI）
 │   ├── main.py              ← Web UI（FastAPI、現在停止中）

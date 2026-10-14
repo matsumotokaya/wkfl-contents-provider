@@ -2,11 +2,13 @@
 
 自分用・ローカル専用の日本語音声研究。モデル一覧 → 会話／読み上げ → 選択モデルの履歴、の小さなWebサイトです。
 
+> **役割**: 声・モデルのリファレンスとリアルタイム会話の研究。TTSは声を選ぶための試聴・1回生成まで。**台本から番組音声を作る制作ラインは `../tts-studio/` の担当**で、ここには統合しない。両者は依存を持たない。役割分担の正本は [ルートREADME「音声ツールの役割分担」](../README.md#音声ツールの役割分担2026-10-14-決定)。
+
 仕様・構成・確認状態・残件は [HANDOFF.md](HANDOFF.md)、資格情報は [CREDENTIALS.md](CREDENTIALS.md)、目指す方向（受動的な発信）は [CONCEPT.md](CONCEPT.md) が正本です。
 
 ## 起動
 
-Node.js 22.14以上。WKFLの `tts-studio/node_modules/ws` があれば追加インストール不要です。独立した環境では `npm install --ignore-scripts` で固定バージョンの `ws` を導入してください。
+Node.js 22.14以上。初回だけ `npm install --ignore-scripts` で固定バージョンの `ws` を導入してください（TTS Studioの `node_modules` は借りません）。
 
 ```bash
 cd /Users/kaya.matsumoto/projects/WKFL/conversation-lab
@@ -48,7 +50,7 @@ Liveの会話録音は、ブラウザAudioWorkletの共通サンプルクロッ�
 
 **これは物理スピーカーのループバック録音ではありません。** OSの音量・ミュート・Bluetooth遅延・実際に耳に届いた音は測定しません。ブラウザ実機での再生録音は未検証です。モックでは既知の無音100ms、入力100ms、応答100ms、割り込み後の無音100msと、終了端のフラッシュ・欠損検出を検証します。
 
-TTSは `request_to_complete_wav_ms`（サーバー処理開始→全WAV受信）。Live手動モードは `server_activity_end_to_first_audio_ms`（ローカルサーバーの終了通知処理→最初の応答PCM受信）。**人間の実際の発話終了→スピーカー再生開始の遅延ではありません。** 自然会話の遅延は未計測。既存Studioの推定字幕時刻は利用しません。
+TTSは `request_to_complete_wav_ms`（サーバー処理開始→全WAV受信）。Live手動モードは `server_activity_end_to_first_audio_ms`（ローカルサーバーの終了通知処理→最初の応答PCM受信）。**人間の実際の発話終了→スピーカー再生開始の遅延ではありません。** 自然会話の遅延は未計測。TTS Studioの推定字幕時刻は利用しません。
 
 使用量はGoogleの `usage` / `usageMetadata` を原形のまま記録し、Liveはイベント単位で残します。累積値／ターン値を勝手に合算しません。Gemini 3.8 Liveは通知別の取得済みモダリティ内訳だけを公式単価で概算表示します。通知は合算せず、最終使用量と集計範囲が未確認のセッション総額は `null`（不明）のままです。新規Liveでは単価・確認日・公式URL付きの `costSummary` を保存します。詳細は [HANDOFF.md](HANDOFF.md#使用量と概算料金)。モック測定は `simulated: true`。
 
@@ -71,12 +73,12 @@ npm test
 
 サーバーは127.0.0.1にのみbind。Host・Origin・Fetch Metadata・メモリ上のリクエストトークンを検査し、WebSocketのupgradeでもOriginとトークンを検査します。ページ自体の表示（トップレベルのGETナビゲーション）だけは別サイト起点でも許可します（ブラウザ自動操作で画面を確認するため。2026-10-11ユーザー承認）。API読み取り・生成・会話開始の検査は変えていません。Googleへの接続はサーバープロキシで、ブラウザに長期キーを渡しません。公開ホスティング・ユーザー認証・公開ストレージは未実装です。
 
-`lib/google.mjs` がベンダー接続、`lib/catalog.mjs` がTTS/Live別のモデル・声カタログ、`../tools/credentials.mjs` が旧TTS Studioと共通のWKFL専用資格情報参照（`lib/credentials.mjs`から再export）、`lib/store.mjs` が保存境界です。声リストは別々に保持し、名称の一致を音質の同一性とは扱いません。Grounding・ツール呼び出し・声の複製は無効／未実装です。
+`lib/google.mjs` がベンダー接続、`lib/catalog.mjs` がTTS/Live別のモデル・声カタログ、`../tools/credentials.mjs` がTTS Studioと共通のWKFL専用資格情報参照（`lib/credentials.mjs`から再export）、`lib/store.mjs` が保存境界です。声リストは別々に保持し、名称の一致を音質の同一性とは扱いません。Grounding・ツール呼び出し・声の複製は無効／未実装です。
 
 ## 公式仕様（2026-10-11確認）
 
 - [モデル一覧](https://ai.google.dev/gemini-api/docs/models): 通常推論 `gemini-3.8-flash` はこのアプリの音声モデル一覧に含めない。
-- [TTS](https://ai.google.dev/gemini-api/docs/speech-generation): 3.8はREST Interactions API、本文と `speech_metadata.style` を分離。旧StudioのgenerateContent形式を流用しない。
+- [TTS](https://ai.google.dev/gemini-api/docs/speech-generation): 3.8はREST Interactions API、本文と `speech_metadata.style` を分離。TTS Studio（3.1）のgenerateContent形式を流用しない。
 - [Live WebSocket](https://ai.google.dev/gemini-api/docs/live-api/get-started-websocket) / [APIリファレンス](https://ai.google.dev/api/live): WSSはv1beta、音声は入力16 kHz／出力24 kHz。
 - [Live capabilities](https://ai.google.dev/gemini-api/docs/live-api/capabilities): 声の対応と自動VAD。native audio出力モデルはTTSの全プリセット声（30種）に対応。声リストはTTSとは別設定にする。性別は[Google Cloud Gemini-TTS資料](https://docs.cloud.google.com/text-to-speech/docs/gemini-tts)の表による。
 
