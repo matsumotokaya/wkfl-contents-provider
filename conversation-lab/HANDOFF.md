@@ -79,19 +79,20 @@ Gemini 3.8 Liveのみ上部に公式料金とトークン例、下部に日本�
 | `lib/studio.mjs` | 番組づくりのやりたいこと一覧・表現プリセット・指示文の組み立て・進行の合図 |
 | `lib/transcript.mjs` | 文字起こしの断片を話者ごとの行にまとめる |
 | `lib/google.mjs` | Gemini Live WSS / TTS Interactions接続、モック |
+| `lib/minimax.mjs` | MiniMax T2A 接続（クローンボイスの読み上げ）、モック。声・課金・手順は `MINIMAX.md` |
 | `lib/catalog.mjs` | モデル・声（30種）・声プロフィール・入力の検証 |
 | `lib/snippets.mjs` | 声ごとの発行コード。実リクエストもここから作る |
 | `lib/voice-demos.mjs` / `scripts/voice-demos.mjs` | 日本語デモの生成・状態判定・一覧 |
 | `lib/cost.mjs` | 2026-10-11確認の料金スナップショット、純粋な使用量概算関数。サーバーと画面で共用 |
 | `lib/store.mjs` | JSON/WAV保存。新規Live終了時は料金スナップショットも保存 |
 | `lib/timeline.mjs` | 共通サンプル時間軸から録音を組み立てる |
-| `../tools/credentials.mjs` | WKFL専用キーの共通解決。TTS Studioも使用 |
+| `../tools/credentials.mjs` | キーの共通解決（Google/OpenAI は WKFL専用、MiniMax は他プロジェクトと共用の `~/.secrets/minimax-token`）。TTS Studioも使用 |
 | `test/` | 外部接続を禁止したモックと純粋関数テスト |
 | `data/experiments/<UUID>/` | 実接続の録音・metadata.json。Git対象外 |
 | `data/mock/<UUID>/` | 合成音の検証記録。Git対象外 |
 | `verification/` | 許可された実接続の非秘密検証記録 |
 
-`metadata.json`にはモデル・声・条件・日時・状態・イベント・使用量通知・計測・録音情報・ファイル名・送受信量（`transport`）を保持する。音声チャンクはイベントにしない（件数とバイト数のみ）。文字起こしは `lib/transcript.mjs` が話者ごとの行にまとめて保存する（`transcriptFormat: speaker-lines-v1`、2026-10-12）。全二重の GPT-Live では相手の相づちが話し手の断片の間に割り込んで届くため、届いた順につなぐと「け／ど」のように単語が切れていた。規則：句読点だけの断片はその話者の行につなぐ。それ以外は、前の断片から2.5秒以内で、その間に相手が相づち（記号を除き6文字以下）しか言っていなければつなぐ。時刻は GPT-Live なら公式の `start_ms`/`end_ms`（公式に「届いた順でなくこれでまとめる」とある。GPT-Live に文字起こしの設定項目はない）、Realtime の自分の発言は `speech_started` の時刻（文字起こしは返答が始まった後に届くため）、ほかは到着時刻。Gemini の turnComplete と Realtime の response.done でモデルの行を区切る。表示では、相手が話している最中の相づちを段落から外し（保存データには残す）、同じ話者の連続する行を1段落にする。旧形式の記録は表示時に同じ規則でまとめ直す。頻発しうるイベント種別は上限件数（`log-capped`）で打ち切る。1時間の会話でもJSONは数百KB程度。終了済みの従来データは書き換えず、画面で現行スナップショットによる概算を計算する。新規Liveは `costSummary` に単価・URL・確認日・通知別内訳を保存。既存の `cost: null` は確定請求額がないことを表す。TTSの料金算出は未実装。
+`metadata.json`にはモデル・声・条件・日時・状態・イベント・使用量通知・計測・録音情報・ファイル名・送受信量（`transport`）を保持する。音声チャンクはイベントにしない（件数とバイト数のみ）。文字起こしは `lib/transcript.mjs` が話者ごとの行にまとめて保存する（`transcriptFormat: speaker-lines-v1`、2026-10-12）。全二重の GPT-Live では相手の相づちが話し手の断片の間に割り込んで届くため、届いた順につなぐと「け／ど」のように単語が切れていた。規則：句読点だけの断片はその話者の行につなぐ。それ以外は、前の断片から2.5秒以内で、その間に相手が相づち（記号を除き6文字以下）しか言っていなければつなぐ。時刻は GPT-Live なら公式の `start_ms`/`end_ms`（公式に「届いた順でなくこれでまとめる」とある。GPT-Live に文字起こしの設定項目はない）、Realtime の自分の発言は `speech_started` の時刻（文字起こしは返答が始まった後に届くため）、ほかは到着時刻。Gemini の turnComplete と Realtime の response.done でモデルの行を区切る。表示では、相手が話している最中の相づちを段落から外し（保存データには残す）、同じ話者の連続する行を1段落にする。旧形式の記録は表示時に同じ規則でまとめ直す。頻発しうるイベント種別は上限件数（`log-capped`）で打ち切る。1時間の会話でもJSONは数百KB程度。終了済みの従来データは書き換えず、画面で現行スナップショットによる概算を計算する。新規Liveは `costSummary` に単価・URL・確認日・通知別内訳を保存。既存の `cost: null` は確定請求額がないことを表す。TTSの料金算出は MiniMax だけ実装（`summarizeTts`：課金対象の文字数×単価＋クローンの初回利用料。生成時に `costSummary` へ保存）。Gemini TTS は未実装。
 
 ## 録音の意味
 

@@ -5,21 +5,22 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { WebSocketServer } from './lib/deps.mjs';
-import { catalog, sampleText, validate, voiceProfiles, openaiVoiceProfiles, gptLiveVoiceProfiles } from './lib/catalog.mjs';
-import { credentialSource, loadGoogleKey, openaiCredentialSource, loadOpenAIKey } from './lib/credentials.mjs';
+import { catalog, sampleText, validate, voiceProfiles, openaiVoiceProfiles, gptLiveVoiceProfiles, minimaxVoiceProfiles } from './lib/catalog.mjs';
+import { credentialSource, loadGoogleKey, openaiCredentialSource, loadOpenAIKey, minimaxCredentialSource, loadMinimaxKey } from './lib/credentials.mjs';
 import { synthesize, connectLive, liveGreetingPrompt } from './lib/google.mjs';
+import { synthesize as synthesizeMinimax } from './lib/minimax.mjs';
 import { connectRealtime } from './lib/openai.mjs';
 import { connectGptLive } from './lib/openai-live.mjs';
 import { pcmFromBase64 } from './lib/audio.mjs';
 import { Timeline } from './lib/timeline.mjs';
 import { Store } from './lib/store.mjs';
-import { summarizeLive } from './lib/cost.mjs';
+import { summarizeLive, summarizeTts } from './lib/cost.mjs';
 import { TranscriptGrouper } from './lib/transcript.mjs';
 import { studioCues } from './lib/studio.mjs';
 import { demoSettings, demoSets, publicDemoSettings, readDemos } from './lib/voice-demos.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
-export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'mock' : 'experiments'), voiceDemoDir = join(root, 'data', 'voice-demos', demoSets.google.dirName), openaiVoiceDemoDir = join(root, 'data', 'voice-demos', demoSets.openai.dirName), historyLimit = 5, trashDir = null, maxSessionMs = 90 * 60 * 1000, provider = { synthesize, connectLive, connectRealtime, connectGptLive } } = {}) {
+export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'mock' : 'experiments'), voiceDemoDir = join(root, 'data', 'voice-demos', demoSets.google.dirName), openaiVoiceDemoDir = join(root, 'data', 'voice-demos', demoSets.openai.dirName), historyLimit = 5, trashDir = null, maxSessionMs = 90 * 60 * 1000, provider = { synthesize, synthesizeMinimax, connectLive, connectRealtime, connectGptLive } } = {}) {
   const store = new Store(dataDir);
   store.recoverStale();
   // History is kept short on purpose (user decision, 2026-10-11); older items go to the trash folder.
@@ -55,10 +56,11 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
     try {
       if (req.method === 'GET' && pathname === '/health') return json(res, 200, { status: 'ok', mock, providerCallsOnPageLoad: false });
       if (req.method === 'GET' && pathname === '/api/config') {
-        let source = 'missing', openaiSource = 'missing';
+        let source = 'missing', openaiSource = 'missing', minimaxSource = 'missing';
         try { source = mock ? 'mock-no-key-read' : credentialSource({ repoRoot: join(root, '..') }).type; } catch { source = 'invalid-path'; }
         try { openaiSource = mock ? 'mock-no-key-read' : openaiCredentialSource().type; } catch { openaiSource = 'invalid-path'; }
-        return json(res, 200, { csrf, mock, catalog, voiceProfiles, openaiVoiceProfiles, gptLiveVoiceProfiles, openaiCredentialSource: openaiSource, voiceDemos: { ...demoSettings, demos: readDemos(voiceDemoDir) }, openaiVoiceDemos: { ...publicDemoSettings(demoSets.openai), demos: readDemos(openaiVoiceDemoDir, demoSets.openai) }, sampleText, credentialSource: source, maxSeconds: Math.floor(maxSessionMs / 1000) });
+        try { minimaxSource = mock ? 'mock-no-key-read' : minimaxCredentialSource().type; } catch { minimaxSource = 'invalid-path'; }
+        return json(res, 200, { csrf, mock, catalog, voiceProfiles, openaiVoiceProfiles, gptLiveVoiceProfiles, minimaxVoiceProfiles, openaiCredentialSource: openaiSource, minimaxCredentialSource: minimaxSource, voiceDemos: { ...demoSettings, demos: readDemos(voiceDemoDir) }, openaiVoiceDemos: { ...publicDemoSettings(demoSets.openai), demos: readDemos(openaiVoiceDemoDir, demoSets.openai) }, sampleText, credentialSource: source, maxSeconds: Math.floor(maxSessionMs / 1000) });
       }
       if (req.method === 'GET' && pathname === '/api/experiments') return json(res, 200, store.list());
       if (req.method === 'POST' && pathname === '/api/stop') { active?.stop(); return json(res, 200, { stopped: true }); }
@@ -73,16 +75,21 @@ export function createLab({ mock = false, dataDir = join(root, 'data', mock ? 'm
         const disconnect = () => { if (!res.writableEnded) controller.abort(); };
         res.on('close', disconnect);
         try {
-          const key = mock ? null : loadGoogleKey({ repoRoot: join(root, '..') });
-          const result = await provider.synthesize(settings, { key, mock, signal: controller.signal });
+          const minimax = settings.provider === 'minimax';
+          const key = mock ? null : minimax ? loadMinimaxKey() : loadGoogleKey({ repoRoot: join(root, '..') });
+          const result = await (minimax ? provider.synthesizeMinimax : provider.synthesize)(settings, { key, mock, signal: controller.signal });
           if (controller.signal.aborted) throw new Error('Aborted');
           store.audio(item, 'speech.wav', result.audio);
-          if (result.usage) item.usage.push({ source: 'google-interactions', value: result.usage });
+          if (result.usage) item.usage.push({ source: minimax ? 'minimax-t2a' : 'google-interactions', value: result.usage });
+          item.costSummary = summarizeTts(item);
           item.metrics.push({ name: 'request_to_complete_wav_ms', value: Math.round(performance.now() - begin), simulated: mock });
           item.status = 'completed'; item.endedAt = new Date().toISOString(); store.save(item); prune();
           return json(res, 200, item);
-        } catch {
-          item.status = controller.signal.aborted ? 'cancelled' : 'failed'; item.endedAt = new Date().toISOString(); store.save(item);
+        } catch (error) {
+          // Our own messages only (HTTP status, provider status code, quota id); provider bodies never reach them.
+          item.status = controller.signal.aborted ? 'cancelled' : 'failed'; item.endedAt = new Date().toISOString();
+          if (!controller.signal.aborted) item.error = String(error?.message || '').slice(0, 200);
+          store.save(item);
           return json(res, 502, { error: controller.signal.aborted ? 'Generation stopped or timed out; remote billing may already have occurred.' : 'Generation failed. Check key access, model availability and quota. No automatic retry.', id: item.id });
         } finally { clearTimeout(timeout); res.off('close', disconnect); active = null; }
       }

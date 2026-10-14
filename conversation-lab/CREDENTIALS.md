@@ -61,6 +61,7 @@
 | GitHub Actions | GitHub SecretsのOpenAI／Anthropic | ローカル移行と別管理。変更しない |
 | Render旧Web | `render.yaml`の`ANTHROPIC_API_KEY`、`sync:false` | 設定のみ確認済み。変更しない |
 | fal画像生成 | `FAL_KEY` または `~/.secrets/fal-token` | ホーム参照を維持。新Labから読まない |
+| MiniMax T2A（Conversation Lab） | `~/.secrets/minimax-token` または絶対パスの `MINIMAX_API_KEY_FILE` のみ（`tools/credentials.mjs` の `loadMinimaxKey`）。一般の `MINIMAX_API_KEY` は無視 | **WKFL専用の例外。** gen-video など他プロジェクトとも共用するキーとしてホームに置く（2026-10-14 ユーザー決定）。2026-10-14 に gen-video の従量課金キー `MINIMAX_API_KEY` を値を表示せずにコピーして配置（600）。無料の `get_voice` でクローンボイスが見えることを確認。詳細は [MINIMAX.md](MINIMAX.md) |
 | OpenAI Realtime（Conversation Lab） | `~/.secrets/wkfl/openai-token` または絶対パスの `OPENAI_API_KEY_FILE` のみ（`tools/credentials.mjs` の `loadOpenAIKey`）。一般の `OPENAI_API_KEY` は無視 | 2026-10-11 にWKFL用キー（末尾 `…UxoA`）を新規発行して配置（600）。モデル一覧の取得で gpt-realtime-2.1 / mini / gpt-4o-mini-transcribe の利用可を確認。既存の wkfl-ai-news（`…gMoA`）はGitHub Actionsのシークレットにだけあり取り出せない。対応表は `~/playbooks/openai-api-keys.md` |
 | ElevenLabs／Cartesia | 新Labには接続・資格情報実装なし | キー登録・保存先作成をしない |
 

@@ -22,6 +22,7 @@ npm run mock
 ## 現在できること
 
 - Gemini 3.8 Flash TTS / Flash-Lite TTS: 同じ日本語短文と声・読み方を指定し、1回ずつWAVと条件を保存。
+- MiniMax T2A（speech-2.8-hd / turbo）: gen-video から取り込んだクローンボイス `nijiVoiceRefA01` で同じく1回ずつ生成・保存。文字数から概算料金を表示する。キーは他プロジェクトと共用の `~/.secrets/minimax-token`。声・課金・手順は [MINIMAX.md](MINIMAX.md)。
 - Gemini 3.8 Live: 自然会話を既定とし、サーバーVADで発話を検出。開始後マイクを送り、音声応答を再生。割り込み時は再生キューを破棄。
 - 手動区切りモード: 「話し始める」→「発話を送る」で区切り、終了通知から最初の音声受信までを測定。
 - Liveの上限は1分〜90分から選ぶ（既定5分）。使いすぎ防止のためで、会話は停止ボタンでいつでも終えられます。各モデルの公式セッション上限は画面に表示します（Realtime は60分、GPT-Live は非公開、Gemini は圧縮とセッション再開で接続を継ぎ直す）。
@@ -29,7 +30,7 @@ npm run mock
 - OpenAI Realtime（gpt-realtime-2.1 / mini）: Gemini Liveと同じ画面・録音・料金表示で会話できる。
 - 番組づくり（`/studio`、実験）: やりたいことから選ぶ別ページ。いまはポッドキャストのインタビューだけ試せる。AIがホストとして質問し、答えていくだけで番組が1本できる。表現の設定（番組名・テーマ・ホストの人格・聞き方など）は全モデル共通で、名前を付けて保存できる。詳細は [HANDOFF.md](HANDOFF.md#番組づくりstudio実験2026-10-12-実装実会話未検証)。
 - OpenAI GPT-Live（gpt-live-1）: 会話は gpt-live-1、深い推論は委任先（gpt-6-luna / gpt-6-sol）が担当。全二重のため自然会話のみ。料金は音声の秒数＋委任先のトークン。キーは `~/.secrets/wkfl/openai-token`。RealtimeとGPT-Liveの違いは画面の説明パネル。
-- 選択モデルごとの日時・声・条件・録音・文字起こし・API使用量と概算料金（USD・円）の履歴。モデルごとに新しい5件だけ残し、古いものはmacOSのゴミ箱へ移す。ElevenLabs / Cartesiaは無効な「追加予定」のみ。
+- 選択モデルごとの日時・声・条件・録音・文字起こし・API使用量と概算料金（USD・円）の履歴。モデルごとに新しい5件だけ残し、古いものはmacOSのゴミ箱へ移す。ElevenLabs / Cartesiaは無効な「追加予定」のみ。声の新規クローンは画面に無い。
 
 Gemini Live・OpenAI Realtime・GPT-Live は、2026-10-11〜12 にユーザーの実会話で動作を確認しました。全声の日本語品質や自然な割り込みの評価はまだです。確認状態の詳細は [HANDOFF.md](HANDOFF.md#確認状態と次の順序2026-10-12)。
 
@@ -79,6 +80,7 @@ npm test
 
 - [モデル一覧](https://ai.google.dev/gemini-api/docs/models): 通常推論 `gemini-3.8-flash` はこのアプリの音声モデル一覧に含めない。
 - [TTS](https://ai.google.dev/gemini-api/docs/speech-generation): 3.8はREST Interactions API、本文と `speech_metadata.style` を分離。TTS Studio（3.1）のgenerateContent形式を流用しない。
+- [MiniMax T2A](https://platform.minimax.io/docs/api-reference/speech-t2a-http) / [料金](https://platform.minimax.io/docs/guides/pricing)（2026-10-14確認）: 音声は16進文字列で返り、課金は `extra_info.usage_characters`。文章による読み方の指示欄はない。
 - [Live WebSocket](https://ai.google.dev/gemini-api/docs/live-api/get-started-websocket) / [APIリファレンス](https://ai.google.dev/api/live): WSSはv1beta、音声は入力16 kHz／出力24 kHz。
 - [Live capabilities](https://ai.google.dev/gemini-api/docs/live-api/capabilities): 声の対応と自動VAD。native audio出力モデルはTTSの全プリセット声（30種）に対応。声リストはTTSとは別設定にする。性別は[Google Cloud Gemini-TTS資料](https://docs.cloud.google.com/text-to-speech/docs/gemini-tts)の表による。
 

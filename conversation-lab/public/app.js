@@ -1,5 +1,5 @@
-import { summarizeLive, pricingByModel } from '/cost.mjs';
-import { voiceSnippets, openaiVoiceSnippets, gptLiveVoiceSnippets } from '/snippets.mjs';
+import { summarizeLive, summarizeTts, pricingByModel, ttsPricingByModel } from '/cost.mjs';
+import { voiceSnippets, openaiVoiceSnippets, gptLiveVoiceSnippets, minimaxVoiceSnippets } from '/snippets.mjs';
 import { createLiveSession } from '/live-session.js';
 import { $, externalLink, endLabel, formatClock, createTranscriptView, savedTranscript } from '/shared.js';
 let selectedKind = 'live', selectedModel = 'gemini-3.8-live';
@@ -25,9 +25,17 @@ const money = (usdValue, fx) => usdValue === null ? '不明' : `$${usdValue.toFi
 const tokens = value => (value ?? 0).toLocaleString('ja-JP');
 function costView(item) {
   const box = document.createElement('div'); box.className = 'cost-summary';
+  const p = (text, className) => { const node = document.createElement('p'); node.textContent = text; if (className) node.className = className; return node; };
+  if (item.kind === 'tts') {
+    const t = item.costSummary ?? summarizeTts(item);
+    if (!t) return box;
+    box.append(p(`この生成の概算：${money(t.usd, t.fx)}`, 'cost-total'));
+    box.append(p(`課金対象 ${t.characters ?? '不明'}文字 × $${t.pricing.perMillionChars}/100万文字${t.activations ? `　＋ クローンボイスの初回利用料 $${t.pricing.voiceActivation}（この生成で声が有効化されたため。以後はかかりません）` : ''}`, 'note'));
+    box.append(p(`1ドル＝${t.fx.usdJpy}円（${t.fx.label}・${t.fx.date}）で換算。MiniMaxが返した文字数からの概算で、請求額ではありません。`, 'note'));
+    return box;
+  }
   const summary = summarizeLive(item);
   if (!summary) return box;
-  const p = (text, className) => { const node = document.createElement('p'); node.textContent = text; if (className) node.className = className; return node; };
   const fx = summary.fx;
   if (!summary.observations.length) {
     box.append(p('このセッションの概算：不明（Googleからの使用量通知が届いていません。0円ではありません）', 'cost-total'));
@@ -87,6 +95,8 @@ function selectModel(kind, model) {
     if (!cfg.mock) { $('turn-mode').hidden = live; document.querySelector('label[for="turn-mode"]').hidden = live; }
   }
   $(`${kind}-note`).textContent = cfg.catalog[kind].statusByModel?.[model] || cfg.catalog[kind].status;
+  // MiniMax has no free-text reading instruction, so the field is hidden rather than silently ignored.
+  if (kind === 'tts') { const minimax = provider === 'minimax'; $('tts-condition').hidden = minimax; document.querySelector('label[for="tts-condition"]').hidden = minimax; }
   if (kind === 'live') renderSessionLimit(model);
   if (renderedProvider[kind] !== providerOf(kind, model)) voiceCatalog(kind, model);
   $('tts-panel').hidden = kind !== 'tts'; $('live-panel').hidden = kind !== 'live';
@@ -98,7 +108,7 @@ function selectModel(kind, model) {
 const genderLabel = { female: '女性', male: '男性', neutral: 'ニュートラル' };
 const voiceValue = kind => document.querySelector(`input[name="${kind}-voice"]:checked`)?.value;
 const providerOf = (kind, model) => cfg.catalog[kind].providers?.[model] || 'google';
-const profilesFor = provider => provider === 'openai-live' ? cfg.gptLiveVoiceProfiles.voices : provider === 'openai' ? cfg.openaiVoiceProfiles.voices : cfg.voiceProfiles.voices;
+const profilesFor = provider => provider === 'openai-live' ? cfg.gptLiveVoiceProfiles.voices : provider === 'openai' ? cfg.openaiVoiceProfiles.voices : provider === 'minimax' ? cfg.minimaxVoiceProfiles.voices : cfg.voiceProfiles.voices;
 const renderedProvider = {};
 let demoAudio, demoButton;
 function stopDemo() { demoAudio?.pause(); if (demoButton) demoButton.textContent = demoButton.dataset.label; demoAudio = demoButton = null; }
@@ -113,6 +123,7 @@ function voiceCatalog(kind, model) {
   const provider = providerOf(kind, model), box = $(`${kind}-voice-cards`);
   stopDemo(); box.replaceChildren(); renderedProvider[kind] = provider;
   if (provider === 'openai' || provider === 'openai-live') return openaiVoiceCatalog(kind, box, provider);
+  if (provider === 'minimax') return minimaxVoiceCatalog(kind, box);
   const profiles = cfg.voiceProfiles.voices.filter(v => cfg.catalog[kind].voices.includes(v.name));
   $(`${kind}-voice`).querySelector('.voice-guide').textContent = `Google公式のプリセット${profiles.length}種。LiveとTTSのどちらでも使えます。声の名前で決まるのは声質と特徴語の傾向までで、性格や話し方は「${kind === 'live' ? '会話の条件' : '読み方・比較条件'}」で指示します。日本語での声質は未確認です。`;
   for (const gender of ['female', 'male', 'neutral']) {
@@ -166,6 +177,23 @@ function openaiVoiceCatalog(kind, box, provider) {
   box.append(grid, sources);
   selectedVoice(kind);
 }
+function minimaxVoiceCatalog(kind, box) {
+  const source = cfg.minimaxVoiceProfiles, grid = document.createElement('div');
+  $(`${kind}-voice`).querySelector('.voice-guide').textContent = `MiniMax の声${source.voices.length}種。プリセットではなく、このアカウントでクローンした声です（別のアカウントのキーからは使えません）。喋り方まで学習済みのため、読み方の指示はありません。`;
+  grid.className = 'voice-grid';
+  for (const v of source.voices) {
+    const card = document.createElement('div'), input = document.createElement('input'), label = document.createElement('label'), head = document.createElement('span'), name = document.createElement('span'), tag = document.createElement('span'), description = document.createElement('span');
+    card.className = 'voice-card';
+    input.type = 'radio'; input.name = `${kind}-voice`; input.id = `${kind}-voice-${v.name}`; input.value = v.name; input.checked = v.name === cfg.catalog[kind].defaultVoiceByProvider.minimax; input.onchange = () => selectedVoice(kind);
+    label.htmlFor = input.id; head.className = 'voice-head'; name.className = 'voice-name'; name.textContent = v.name; tag.className = 'tag'; tag.textContent = 'クローン';
+    description.className = 'voice-style-ja'; description.textContent = `${v.description}（${v.createdAt}作成）`;
+    head.append(name, tag); label.append(head, description); card.append(input, label, codePanel(v, kind)); grid.append(card);
+  }
+  const sources = document.createElement('p'); sources.className = 'note';
+  sources.append('クローンの手順・課金・元の音源の記録は MINIMAX.md。', externalLink(source.source, 'T2A の仕様'), `（${source.checkedAt}確認）`);
+  box.append(grid, sources);
+  selectedVoice(kind);
+}
 function codePanel(profile, kind) {
   const details = document.createElement('details'), summary = document.createElement('summary');
   details.className = 'voice-code'; summary.textContent = '</> コード'; summary.setAttribute('aria-label', `${profile.name}を使うためのコード`);
@@ -176,7 +204,9 @@ function codePanel(profile, kind) {
     details.replaceChildren(summary);
     const model = $(`${kind}-model`).value;
     const provider = providerOf(kind, model);
-    const snippets = provider === 'openai-live'
+    const snippets = provider === 'minimax'
+      ? minimaxVoiceSnippets(profile, { model, text: cfg.sampleText, checkedAt: cfg.minimaxVoiceProfiles.checkedAt })
+      : provider === 'openai-live'
       ? gptLiveVoiceSnippets(profile, { delegate: $('live-delegate').value, checkedAt: cfg.gptLiveVoiceProfiles.checkedAt })
       : provider === 'openai'
       ? openaiVoiceSnippets(profile, { model, checkedAt: cfg.openaiVoiceProfiles.checkedAt })
@@ -202,7 +232,7 @@ function demoControl(name, text, url) {
 }
 function selectedVoice(kind) {
   const v = profilesFor(renderedProvider[kind]).find(p => p.name === voiceValue(kind));
-  $(`${kind}-voice-selected`).textContent = !v ? '' : v.gender ? `選択中：${v.name}（${genderLabel[v.gender]}・${v.styleJa}）` : `選択中：${v.name}${v.recommended ? '（推奨）' : v.isDefault ? '（初期値）' : ''}`;
+  $(`${kind}-voice-selected`).textContent = !v ? '' : v.clone ? `選択中：${v.name}（クローン）` : v.gender ? `選択中：${v.name}（${genderLabel[v.gender]}・${v.styleJa}）` : `選択中：${v.name}${v.recommended ? '（推奨）' : v.isDefault ? '（初期値）' : ''}`;
 }
 function renderGptLivePricing(panel, p, h, para) {
   const table = document.createElement('table'), thead = document.createElement('thead'), body = document.createElement('tbody'), row = cells => { const tr = document.createElement('tr'); for (const value of cells) { const td = document.createElement('td'); td.textContent = value; tr.append(td); } return tr; };
@@ -214,12 +244,22 @@ function renderGptLivePricing(panel, p, h, para) {
     para('GPT-Live は、会話の音声を秒単位で、委任先（考える役）のモデルをトークン単位で、別々に課金します。委任しなかった会話は音声代だけです。会話の概算は、OpenAIが送る音声の累計秒数（届かなければ経過時間）と、委任ごとに届くトークン数の合計です。', 'note'),
     externalLink(p.source, '公式料金'), ' · ', externalLink(p.usageSource, 'セッションと使用量の仕様'));
 }
+function renderTtsPricing(panel, p, h, para) {
+  const table = document.createElement('table'), thead = document.createElement('thead'), body = document.createElement('tbody'), row = cells => { const tr = document.createElement('tr'); for (const value of cells) { const td = document.createElement('td'); td.textContent = value; tr.append(td); } return tr; };
+  const head = document.createElement('tr'); for (const label of ['対象', '単価']) { const th = document.createElement('th'); th.textContent = label; head.append(th); } thead.append(head);
+  body.append(row(['読み上げ（課金対象の文字数）', `$${p.perMillionChars} / 100万文字`]), row(['クローンボイスの初回利用', `$${p.voiceActivation} / 声（最初の合成で1回だけ）`]));
+  table.append(thead, body);
+  panel.append(h, para(`公式の従量課金 / USD / ${p.checkedAt}確認`, 'note'), table,
+    para('生成の概算は、MiniMaxが返す課金対象の文字数 × 単価です。nijiVoiceRefA01 は2026-08-12に有効化済みのため、クローンの利用料はもうかかりません。', 'note'),
+    externalLink(p.source, '公式料金'), ' · ', externalLink(p.usageSource, 'T2A の仕様'));
+}
 function renderPricing(model) {
-  const panel = $('model-pricing'), p = pricingByModel[model];
+  const panel = $('model-pricing'), p = pricingByModel[model] || ttsPricingByModel[model];
   panel.replaceChildren(); panel.hidden = !p;
   if (!p) return;
   const para = (text, className) => { const node = document.createElement('p'); node.textContent = text; if (className) node.className = className; return node; };
   const h = document.createElement('h2'); h.id = 'pricing-title'; h.textContent = `${model} の料金`;
+  if (p.provider === 'minimax') return renderTtsPricing(panel, p, h, para);
   if (p.provider === 'openai-live') return renderGptLivePricing(panel, p, h, para);
   const cached = Boolean(p.cachedInput), price = v => v === undefined ? '—' : `$${v.toFixed(2)}`;
   const table = document.createElement('table'), head = document.createElement('tr'), body = document.createElement('tbody');
@@ -248,6 +288,7 @@ async function refresh() {
     const meta = document.createElement('p'); meta.className = 'meta'; meta.textContent = `${new Date(item.createdAt).toLocaleString('ja-JP')} · ${item.status}` + (item.endReason ? ' · ' + endLabel(item.endReason) : '');
     const condition = document.createElement('p'); condition.textContent = item.condition;
     info.append(h, model, meta, condition);
+    if (item.error) { const error = document.createElement('p'); error.className = 'note cost-warning'; error.textContent = `失敗の理由：${item.error}`; info.append(error); }
     if (item.mock) { const cost = document.createElement('p'); cost.textContent = '合成テスト音・課金なし・実測比較対象外'; info.append(cost); }
     info.append(costView(item));
     if (item.kind === 'live') { const log = document.createElement('details'), title = document.createElement('summary'); title.textContent = '保存済み対話ログ'; log.append(title); for (const line of savedTranscript(item)) { const p = document.createElement('p'); p.textContent = `${line.role === 'user' ? '自分' : 'モデル'}：${line.text}`; log.append(p); } media.append(log); }
@@ -314,7 +355,7 @@ try {
     for (const value of cfg.catalog[kind].models) { const option = document.createElement('option'); option.value = value; option.textContent = value; $(`${kind}-model`).append(option); }
     for (const model of cfg.catalog[kind].models) {
       const button = document.createElement('button'); button.dataset.model = model; button.textContent = model;
-      const small = document.createElement('small'); small.textContent = cfg.mock ? 'デモ表示のみ / AI未接続' : kind === 'tts' ? 'Google / 読み上げ' : { openai: 'OpenAI / Realtime', 'openai-live': 'OpenAI / GPT-Live' }[providerOf(kind, model)] || 'Google / Live';
+      const small = document.createElement('small'); small.textContent = cfg.mock ? 'デモ表示のみ / AI未接続' : kind === 'tts' ? (providerOf(kind, model) === 'minimax' ? 'MiniMax / 読み上げ' : 'Google / 読み上げ') : { openai: 'OpenAI / Realtime', 'openai-live': 'OpenAI / GPT-Live' }[providerOf(kind, model)] || 'Google / Live';
       button.append(small); button.onclick = () => selectModel(kind, model); $('models').append(button);
     }
     $(`${kind}-model`).onchange = () => selectModel(kind, $(`${kind}-model`).value);
@@ -323,7 +364,7 @@ try {
   $('text').value = cfg.sampleText; $('mode').textContent = cfg.mock ? 'デモ / AI未接続' : '実接続 / API課金あり';
   $('mode-notice').textContent = cfg.mock ? 'デモモード：AIには接続しません。音声会話はできません。料金は発生しません。' : '実接続モード：音声の生成・会話の開始操作からAPI料金が発生します。Liveの接続のみ確認済み。マイク会話・声質・実額は未検証です。';
   $('mode-notice').classList.toggle('api-mode', !cfg.mock);
-  $('credentials').textContent = `資格情報の参照方式：Google ${cfg.credentialSource} / OpenAI ${cfg.openaiCredentialSource}（値は表示しません）`;
+  $('credentials').textContent = `資格情報の参照方式：Google ${cfg.credentialSource} / OpenAI ${cfg.openaiCredentialSource} / MiniMax ${cfg.minimaxCredentialSource}（値は表示しません）`;
   if (cfg.mock) {
     for (const node of document.querySelectorAll('.api-notice')) node.textContent = 'デモの動作確認です。外部API・マイクは使わず、保存されるのは合成テスト音です。';
     $('live-start').textContent = 'デモの動作を確認';

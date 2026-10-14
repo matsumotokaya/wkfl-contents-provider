@@ -27,6 +27,18 @@ export const pricingByModel = Object.freeze({
     backend: { 'gpt-6-luna': { input: 0.1, cachedInput: 0.01, output: 0.5 }, 'gpt-6-sol': { input: 2, cachedInput: 0.2, output: 10 } },
   }),
 });
+// TTS priced per character (MiniMax pay-as-you-go, checked 2026-10-14). A cloned voice adds a one-time fee on its
+// first synthesis; the response marks that call with extra_info.usage_voice_count.
+const minimaxPricing = (model, perMillionChars) => Object.freeze({
+  provider: 'minimax', model, checkedAt: '2026-10-14', currency: 'USD', unit: '1M characters',
+  source: 'https://platform.minimax.io/docs/guides/pricing',
+  usageSource: 'https://platform.minimax.io/docs/api-reference/speech-t2a-http',
+  perMillionChars, voiceActivation: 1.5,
+});
+export const ttsPricingByModel = Object.freeze({
+  'speech-2.8-hd': minimaxPricing('speech-2.8-hd', 100),
+  'speech-2.8-turbo': minimaxPricing('speech-2.8-turbo', 60),
+});
 // Reference rate for showing yen. Update together with prices before publishing.
 export const fxSnapshot = Object.freeze({
   usdJpy: 158.25, date: '2026-10-09', label: '欧州中央銀行（ECB）の参考レート',
@@ -150,5 +162,20 @@ function summarizeGptLive(item, p) {
     modelTurns: countModelTurns(item.events), missingNotices: 0, finalUsageConfirmed: observations[0].final,
     aggregation: 'voice-seconds-plus-backend-tokens',
     note: 'Voice seconds × per-minute rate plus delegated backend tokens. Estimate, not a bill.',
+  };
+}
+
+export function summarizeTts(item) {
+  const p = ttsPricingByModel[item.model];
+  const usage = (item.usage || []).find(row => row.source === 'minimax-t2a')?.value;
+  if (!p || item.mock || !usage) return null;
+  const characters = count(usage.usage_characters), activations = count(usage.usage_voice_count) ?? 0;
+  const charactersUsd = characters === null ? null : characters * p.perMillionChars / 1e6;
+  const activationUsd = activations * p.voiceActivation;
+  const usd = charactersUsd === null ? null : charactersUsd + activationUsd;
+  return {
+    schema: 'tts-cost-estimate-v1', pricing: p, fx: fxSnapshot, characters, charactersUsd, activations, activationUsd,
+    usd, jpy: usd === null ? null : usd * fxSnapshot.usdJpy,
+    note: 'Billable characters reported by MiniMax × rate, plus the one-time voice fee when this call activated a cloned voice. Estimate, not a bill.',
   };
 }

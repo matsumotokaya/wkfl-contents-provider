@@ -4,6 +4,7 @@ export const snippetDocs = {
   live: 'https://ai.google.dev/gemini-api/docs/live-api/capabilities#change-voice-and-language',
   tts: 'https://ai.google.dev/gemini-api/docs/speech-generation',
   realtime: 'https://developers.openai.com/api/docs/guides/realtime-conversations',
+  minimax: 'https://platform.minimax.io/docs/api-reference/speech-t2a-http',
 };
 export function liveVoiceSetup({ model, voice, instruction }) {
   return {
@@ -121,5 +122,33 @@ export function gptLiveVoiceSnippets(profile, { delegate = 'gpt-6-luna', checked
   return [
     { id: 'prompt', label: 'AIへの指示（Claude Code などに貼る）', text: prompt },
     { id: 'gpt-live', label: `GPT-Live の session.start（委任先 ${delegate}）`, text: JSON.stringify(liveSessionStart({ voice, delegate }), null, 2) },
+  ];
+}
+
+// MiniMax T2A (HTTP, non-streaming); lib/minimax.mjs sends exactly this. WAV at 32 kHz mono, the rate the
+// clone source was converted to. No emotion: a cloned voice keeps its own manner best without one.
+export function minimaxTtsBody({ model, voice, text }) {
+  return {
+    model, text, stream: false, language_boost: 'Japanese',
+    voice_setting: { voice_id: voice, speed: 1, vol: 1, pitch: 0 },
+    audio_setting: { format: 'wav', sample_rate: 32000, channel: 1 },
+    output_format: 'hex',
+  };
+}
+export function minimaxVoiceSnippets(profile, { model, text, checkedAt }) {
+  const voice = profile.name;
+  const prompt = [
+    `MiniMax の音声合成（T2A）でボイス「${voice}」を使って実装してください。`,
+    `- 接続: POST https://api.minimax.io/v1/t2a_v2（Authorization: Bearer <APIキー>。キーはサーバー側に置く）`,
+    `- モデル: ${model}。voice_setting.voice_id を "${voice}" にし、日本語は language_boost を "Japanese" にする。`,
+    '- 音声は data.audio に16進文字列（output_format: "hex"）で返る。課金対象の文字数は extra_info.usage_characters。',
+    `- ${voice} はクローンした声で、作成した MiniMax アカウントのキーからしか使えない。別のアカウントでは自分の音源から Rapid Voice Cloning で声を作り、その voice_id に置き換える（1声 $1.5、初回の合成時に1回だけ課金）。`,
+    '- クローンした声は喋り方まで学習済みなので、voice_setting.emotion は付けない方が元の口調が残る。',
+    `- 実装前に公式資料で仕様を確認する: ${snippetDocs.minimax}`,
+    `（WKFL Conversation Lab 声カタログ・${checkedAt}確認）`,
+  ].join('\n');
+  return [
+    { id: 'prompt', label: 'AIへの指示（Claude Code などに貼る）', text: prompt },
+    { id: 'minimax', label: `T2A のリクエスト（${model}）`, text: JSON.stringify(minimaxTtsBody({ model, voice, text }), null, 2) },
   ];
 }

@@ -61,14 +61,32 @@ export const openaiVoiceProfiles = {
   source: 'https://developers.openai.com/api/docs/guides/realtime-conversations',
   voices: openaiVoiceNames.map(name => ({ name, recommended: name === 'marin' || name === 'cedar' })),
 };
+// MiniMax voices are account assets, not presets: a cloned voice works only with keys of the account that made it.
+// nijiVoiceRefA01 came over from gen-video (2026-10-14); its existence was confirmed with the free get_voice API.
+// Procedure, billing and source material: MINIMAX.md.
+export const minimaxVoiceProfiles = {
+  checkedAt: '2026-10-14',
+  source: 'https://platform.minimax.io/docs/api-reference/speech-t2a-http',
+  voices: [
+    { name: 'nijiVoiceRefA01', clone: true, createdAt: '2026-08-12', description: '日本語の朗読音源（約19秒）から作ったクローンボイス。喋り方は冒頭5秒から学習。' },
+  ],
+};
+const minimaxVoiceNames = minimaxVoiceProfiles.voices.map(v => v.name);
 export const catalog = {
   checkedAt: '2026-10-11',
   tts: {
-    models: ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts'],
+    models: ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts', 'speech-2.8-hd', 'speech-2.8-turbo'],
+    providers: { 'gemini-3.8-flash-tts': 'google', 'gemini-3.8-flash-lite-tts': 'google', 'speech-2.8-hd': 'minimax', 'speech-2.8-turbo': 'minimax' },
     voices: [...voiceNames],
+    voicesByProvider: { google: [...voiceNames], minimax: [...minimaxVoiceNames] },
     defaultVoice: 'Kore',
+    defaultVoiceByProvider: { google: 'Kore', minimax: 'nijiVoiceRefA01' },
     source: 'https://ai.google.dev/gemini-api/docs/speech-generation',
     status: '公式掲載のプリセット30声。実API・日本語の声質は未検証。',
+    statusByModel: {
+      'speech-2.8-hd': 'MiniMax T2A（高品質）。クローンボイスで読み上げる。読み方の文章指示は受け付けません。ラボからの実生成は未検証（gen-video で 2026-08-12 に生成実績あり）。',
+      'speech-2.8-turbo': 'MiniMax T2A（低価格・速い）。クローンボイスで読み上げる。読み方の文章指示は受け付けません。実生成は未検証。',
+    },
   },
   live: {
     models: ['gemini-3.8-live', 'gpt-realtime-2.1', 'gpt-realtime-2.1-mini', 'gpt-live-1'],
@@ -109,7 +127,8 @@ export function validate(kind, body) {
   const condition = typeof body.condition === 'string' ? body.condition.trim() : '';
   // Studio instructions are built from several settings and run longer than a lab condition.
   if (condition.length > (body.studio ? 12000 : 1000)) throw new Error('Condition is too long');
-  const result = { provider, model: body.model, voice: body.voice, condition };
+  // MiniMax T2A has no free-text style field, so a condition would be stored but never applied.
+  const result = { provider, model: body.model, voice: body.voice, condition: provider === 'minimax' ? '' : condition };
   if (kind === 'tts') {
     if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 1500) throw new Error('Text must contain 1–1500 characters');
     result.text = body.text.trim();

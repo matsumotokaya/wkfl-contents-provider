@@ -71,3 +71,24 @@ export function loadOpenAIKey({ env = process.env, home = homedir(), mock = fals
   if (!value) throw new Error('Empty credential file');
   return value;
 }
+
+// MiniMax (Conversation Lab TTS). Unlike Google/OpenAI this key is shared across projects on purpose
+// (user decision 2026-10-14): one home file, ~/.secrets/minimax-token, readable from WKFL and gen-video alike.
+// The plain MINIMAX_API_KEY variable is still ignored so a stray .env never decides which key is billed.
+export function minimaxCredentialSource({ env = process.env, home = homedir() } = {}) {
+  if (env.MINIMAX_API_KEY_FILE) {
+    if (!isAbsolute(env.MINIMAX_API_KEY_FILE)) throw new Error('MINIMAX_API_KEY_FILE must be absolute');
+    return { type: 'explicit-file', path: env.MINIMAX_API_KEY_FILE };
+  }
+  const canonical = join(home, '.secrets', 'minimax-token');
+  if (existsSync(canonical)) return { type: 'home-shared-secret', path: canonical };
+  return { type: 'missing' };
+}
+export function loadMinimaxKey({ env = process.env, home = homedir(), mock = false } = {}) {
+  if (mock) return undefined;
+  const source = minimaxCredentialSource({ env, home });
+  if (source.type === 'missing') throw new Error('MiniMax credential is not configured');
+  const value = readFileSync(source.path, 'utf8').trim();
+  if (!value) throw new Error('Empty credential file');
+  return value;
+}
