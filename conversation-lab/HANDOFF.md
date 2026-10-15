@@ -130,9 +130,13 @@ Gemini 3.8 Liveのみ上部に公式料金とトークン例、下部に日本�
 - **実装済み**: 白基調・全幅の画面、声カタログ（Gemini 30声＋OpenAI Realtime 10声＋GPT-Live 13声のカード、日本語／英語デモ、コード発行）、Gemini Live / OpenAI Realtime（2.1・mini）/ GPT-Live（gpt-live-1＋委任先 gpt-6-luna / gpt-6-sol）の会話、AIからの挨拶、話者ごとにつなげた会話ログ、時間軸を保った録音、セッション合計の概算（USD・円、内訳は開閉式）、履歴はモデルごとに5件（古いものはmacOSのゴミ箱へ）、切断の診断記録。
 - **実会話で確認（ユーザー）**: Gemini 3.8 Live（声の自然さが最良、本命）、OpenAI Realtime 2.1（会話は成立、日本語に外国人のような訛り）、GPT-Live＋gpt-6-luna（受け答えが最も人間らしく速さも十分、議論相手として有力）。
 - **料金の確認**: OpenAIキー（`…UxoA`）の請求 $0.31 と記録の合計 $0.3138 が一致（内訳は「OpenAI Realtime」節）。Geminiは60秒で約3円。
-- **テスト**: `npm run lint` と `npm test`（51件、外部通信は禁止、課金なし）。
+- **テスト**: `npm run lint` と `npm test`（77件、外部通信は禁止、課金なし）。
 - **切断の原因と対策（2026-10-12）**: 10-11 の4件（Rasalgethi 2回・Realtime mini・Kore。5〜45秒で `invalid-request` 終了）は、どれも直前の録音チャンクが短く（1区間〜10区間）、次のチャンクの開始位置が巻き戻っていた。原因は、ブラウザの AudioWorklet が1区間（128フレーム）だけ前の `currentFrame` を返し、次の区間で追いつく現象。旧実装は `currentFrame` を録音位置にしていたため、巻き戻った位置のチャンクを送り、サーバーが「Invalid recording offset」で課金中の会話ごと終了していた。対策：録音位置を worklet 自身の処理フレーム数にし、`currentFrame` とのずれは `recording-drift` イベントに記録（前向きのずれが2区間続いたときだけ欠損として扱う）。サーバーは録音メッセージの失敗で会話を終了せず、置けないチャンクは捨てて `recording-anomaly` / `recording-error` に残す。`currentFrame` が止まる引き金（Chrome 側の要因）は未特定。次の会話で `recording-drift` の値（頻度と幅）を確認する。接続側の切断は `provider-close` / `provider-error` を見る。修正後の最初の5分会話（GPT-Live、10-12）では `recording-drift` が−128で8回起きて全て吸収されたが、今度は固定6 MBのマイク入力上限（180秒用の値）に196秒で当たり `invalid-request` 終了した。入出力の保存上限はセッション上限から算出（入力は実時間、出力は実時間の2倍）し、達した場合は `size-limit` として丁寧に終了する。
-- **未確認**: Gemini Live での全声・自然な割込み、Flash-Lite TTS、GPT-Live の委任の質（いつ委任するかの指示の調整）、gpt-6-sol との比較。
+- **2026-10-14〜15 の作業**:
+  - TTS Studio とは統合しないと決め、依存を切った。ラボは自前で `ws` を入れ、`tools/credentials.mjs` は TTS Studio の dotenv を借りない。役割分担の正本はルート README「音声ツールの役割分担」。
+  - gen-video から MiniMax のクローンボイスを取り込み、TTS ベンダーとして追加した（[MINIMAX.md](MINIMAX.md)）。キーは他プロジェクトと共用の `~/.secrets/minimax-token`。gen-video 側の片付けも完了（gen-video `ac5142d`、word-factory `1794960`）。
+  - 2026-10-15 にユーザーが `speech-2.8-hd` で実生成し、2回とも成功した。生成の結果が画面上部と最下部の履歴にしか出ず「反応がない」と見えたため、生成ボタンのすぐ下に結果（再生・概算料金・失敗理由）を出すようにした。
+- **未確認**: MiniMax `speech-2.8-turbo`、Gemini Live での全声・自然な割込み、Flash-Lite TTS、GPT-Live の委任の質（いつ委任するかの指示の調整）、gpt-6-sol との比較。
 
 次の候補（ユーザーと合意済みの方向）:
 1. **方向性（2026-10-12、ユーザー判断）**: このラボは「受動的な発信」を誰でも体験できるものを目指す（[CONCEPT.md](CONCEPT.md)）。WKFLの記事を深掘りする番組は、このラボではなく個別のプロジェクトに知見を応用して作る。AIが司会（ホスト）として進める部分は番組づくりページで実現済み。以下は以前の「題材の受け渡し」の検討メモで、WKFL側で使える：URLの本文取得はWKFLの記事生成の取得処理（`app/engine/synthesize_articles.py`）を流用できる。GPT-Live の指示文は最大16,384トークン、会話中の追加は `session.thinking.append`（黙って渡す）/ `session.commentary.append`（言い換えて話させる）/ `session.instructions.append` で各500トークンまで。

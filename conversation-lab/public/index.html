@@ -17,7 +17,7 @@
 <fieldset id="tts-voice" class="voice-catalog"><legend>TTSの声 <span id="tts-voice-selected" class="selected-voice" aria-live="polite"></span></legend><p class="note voice-guide"></p><div id="tts-voice-cards"></div></fieldset>
 <label for="tts-condition">読み方・比較条件</label><input id="tts-condition" maxlength="1000" value="自然な日本語で、落ち着いて明瞭に読む。">
 <p id="tts-note" class="note"></p><p class="notice api-notice">1回の生成でAPI料金が発生します。料金・品質は未検証です。</p>
-<div class="actions"><button id="generate" type="submit" class="primary" disabled>この条件で1回生成・保存</button><button id="tts-stop" type="button" disabled>生成を停止</button></div></form>
+<div class="actions"><button id="generate" type="submit" class="primary" disabled>この条件で1回生成・保存</button><button id="tts-stop" type="button" disabled>生成を停止</button></div></form><div id="tts-result" class="tts-result" role="status" aria-live="polite"></div>
 </section>
 <section id="live-panel" class="panel" aria-labelledby="live-title"><div class="section-head"><span class="number">02</span><div><h2 id="live-title">声で会話する</h2><p id="live-subtitle">LIVE / 自然な音声対話</p></div></div>
 <label for="live-model">Liveモデル</label><select id="live-model"></select>

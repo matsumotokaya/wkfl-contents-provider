@@ -309,10 +309,19 @@ async function refresh() {
     row.append(info, media); $('experiments').append(row);
   }
 }
+// The result appears next to the button: the page-top status and the history are often off screen.
+function showTtsResult(item, error) {
+  const box = $('tts-result'), line = document.createElement('p');
+  if (!item) { line.className = 'error'; line.textContent = `生成できませんでした：${error}（理由は下の履歴にも残ります）`; box.replaceChildren(line); return; }
+  line.textContent = `${item.mock ? 'MOCK：合成テスト音を' : '生成した音声を'}保存しました（${item.voice} / ${item.model}）。下の履歴にも残ります。`;
+  const audio = document.createElement('audio'); audio.controls = true; audio.src = `/experiments/${item.id}/speech.wav`;
+  box.replaceChildren(line, audio, costView(item));
+}
 $('tts-form').addEventListener('submit', async event => {
   event.preventDefault(); if (busy) return; busy = true; controls(); status(cfg.mock ? 'MOCK：合成テスト音を保存中…' : '1回だけ生成しています…');
-  try { await api('/api/tts', { model: $('tts-model').value, voice: voiceValue('tts'), text: $('text').value, condition: $('tts-condition').value }); await refresh(); status('音声と条件をローカルに保存しました。'); }
-  catch (error) { status(error.message, true); await refresh().catch(() => {}); }
+  $('tts-result').replaceChildren();
+  try { const item = await api('/api/tts', { model: $('tts-model').value, voice: voiceValue('tts'), text: $('text').value, condition: $('tts-condition').value }); showTtsResult(item); await refresh(); status('音声と条件をローカルに保存しました。'); }
+  catch (error) { status(error.message, true); showTtsResult(null, error.message); await refresh().catch(() => {}); }
   finally { busy = false; controls(); }
 });
 $('tts-stop').onclick = () => api('/api/stop', {}).catch(error => status(error.message, true));

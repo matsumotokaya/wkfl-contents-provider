@@ -159,3 +159,8 @@ footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--sp-3)
   .pages a{padding:var(--sp-1) var(--sp-2)}
   .two,.preset-bar{grid-template-columns:1fr}
 }
+.tts-result{margin-top:var(--sp-4)}
+.tts-result:empty{display:none}
+.tts-result>p{margin:0 0 var(--sp-2);color:var(--accent)}
+.tts-result>p.error{color:var(--danger)}
+.tts-result audio{width:100%}

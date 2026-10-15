@@ -31,7 +31,7 @@ TTS のモデル一覧に `speech-2.8-hd` / `speech-2.8-turbo` があり、声�
 - リクエストは `lib/snippets.mjs` の `minimaxTtsBody`：`language_boost: "Japanese"`、WAV 32kHz mono、`output_format: "hex"`、`emotion` なし。
 - MiniMax には文章で読み方を指示する欄がないため、「読み方・比較条件」は MiniMax のモデルでは隠し、保存もしない。
 - 使用量は `extra_info` の課金に関わる欄だけを `minimax-t2a` として残し、概算は `lib/cost.mjs` の `summarizeTts`。
-- ラボからの実生成は未検証。
+- **2026-10-15 にラボから実生成を確認**（`speech-2.8-hd`・`nijiVoiceRefA01`、2回とも成功）。72文字のサンプル文が課金対象 **169文字**と数えられ、1回 約$0.017（約2.7円）、音声は約32〜35秒。日本語は文字数の約2.3倍で課金されると見ておく（公式資料に数え方の説明はない）。クローンの利用料はかからなかった（有効化済み）。`speech-2.8-turbo` は未検証。
 
 ## 課金（実測で確定）
 

@@ -84,7 +84,7 @@ export const catalog = {
     source: 'https://ai.google.dev/gemini-api/docs/speech-generation',
     status: '公式掲載のプリセット30声。実API・日本語の声質は未検証。',
     statusByModel: {
-      'speech-2.8-hd': 'MiniMax T2A（高品質）。クローンボイスで読み上げる。読み方の文章指示は受け付けません。ラボからの実生成は未検証（gen-video で 2026-08-12 に生成実績あり）。',
+      'speech-2.8-hd': 'MiniMax T2A（高品質）。クローンボイスで読み上げる。読み方の文章指示は受け付けません。2026-10-15 にラボから実生成を確認（サンプル文で約35秒・約2.7円）。',
       'speech-2.8-turbo': 'MiniMax T2A（低価格・速い）。クローンボイスで読み上げる。読み方の文章指示は受け付けません。実生成は未検証。',
     },
   },
